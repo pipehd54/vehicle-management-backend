@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, Column, Integer, String
+from datetime import datetime
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -25,3 +27,14 @@ class UsuarioDB(Base):
 
     rol: Mapped[str] = mapped_column(String(50), default="mecanico")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class MantenimientoDB(Base):
+    __tablename__ = "mantenimientos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    vehiculo_id = Column(Integer, ForeignKey("vehiculos.id"), nullable=False, index=True)
+    descripcion = Column(Text, nullable=False)
+    estado = Column(String(30), nullable=False, default="pendiente")
+    costo_estimado = Column(Integer, nullable=True)
+    fecha_creacion = Column(DateTime, nullable=False, default=datetime.utcnow)

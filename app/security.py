@@ -7,6 +7,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.models import UsuarioDB
 
 load_dotenv()
 
@@ -38,7 +43,10 @@ def crear_token_acceso(data: dict):
     return token_jwt
 
 
-async def obtener_usuario_actual(token: str = Depends(oauth2_scheme)):
+async def obtener_usuario_actual(
+    token: str = Depends(oauth2_scheme),
+    db: AsyncSession = Depends(get_db),
+):
     credenciales_excepcion = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="No se pudo validar la credencial de acceso",
@@ -50,6 +58,14 @@ async def obtener_usuario_actual(token: str = Depends(oauth2_scheme)):
         email: str | None = payload.get("sub")
 
         if email is None:
+            raise credenciales_excepcion
+
+        # Verificamos que el usuario siga existiendo en la base de datos
+        consulta = select(UsuarioDB).where(UsuarioDB.email == email)
+        resultado = await db.execute(consulta)
+        usuario = resultado.scalar_one_or_none()
+
+        if not usuario or not usuario.is_active:
             raise credenciales_excepcion
 
         return email  # Si todo sale bien, dejamos pasar al usuario

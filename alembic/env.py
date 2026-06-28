@@ -1,6 +1,7 @@
 import asyncio
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import pool
@@ -12,7 +13,9 @@ from app import models  # noqa: F401
 from app.database import Base
 from app.models import UsuarioDB, VehiculoDB
 
-load_dotenv()
+# Cargar .env desde la raíz del proyecto
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 target_metadata = Base.metadata
 
@@ -21,7 +24,10 @@ target_metadata = Base.metadata
 config = context.config
 
 # Inyectar la URL de la base de datos desde la variable de entorno
-config.set_main_option("sqlalchemy.url", os.environ.get("DATABASE_URL", ""))
+database_url = os.environ.get("DATABASE_URL")
+if not database_url:
+    raise ValueError("DATABASE_URL no está configurada en el archivo .env")
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

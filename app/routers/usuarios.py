@@ -29,7 +29,7 @@ async def registrar_usuario(usuario: UsuarioCreate, db: AsyncSession = Depends(g
         await db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Este correo ya se encuentra registrado en el sistema.",
+            detail="No se pudo completar el registro. Verifica los datos e inténtalo de nuevo.",
         )
 
     return nuevo_usuario
