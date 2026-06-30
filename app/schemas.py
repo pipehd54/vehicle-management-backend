@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
+from datetime import datetime
 
 
 class VehiculoSchema(BaseModel):
@@ -41,6 +42,7 @@ class MantenimientoResponse(BaseModel):
     descripcion: str
     estado: str
     costo_estimado: int | None
+    fecha_creacion: datetime
 
     class Config:
         from_attributes = True

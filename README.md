@@ -1,39 +1,163 @@
-# 🏍️ Garage API - Sistema de Gestión Vehicular
+# Garage API - Sistema de Gestion de Taller
 
-Un backend robusto y de alto rendimiento diseñado para administrar el registro, inventario y mantenimiento de vehículos en un taller mecánico. Desarrollado bajo una arquitectura asíncrona moderna utilizando Python y FastAPI.
+API backend simple para gestionar usuarios, vehiculos y mantenimientos de un taller mecanico.
 
-## 🚀 Características Principales
+El objetivo del proyecto es mostrar una base funcional de desarrollo backend con Python, FastAPI, PostgreSQL, SQLAlchemy, Alembic, autenticacion JWT y Docker.
 
-* **Arquitectura Asíncrona:** Operaciones de entrada/salida no bloqueantes para un máximo rendimiento.
-* **Seguridad de Nivel Empresarial:** * Hasheo de contraseñas de mecánicos/administradores utilizando `Bcrypt`.
-    * Protección de endpoints mediante tokens de acceso `JWT` (JSON Web Tokens).
-* **Base de Datos Relacional:** Modelado de datos estructurado utilizando `PostgreSQL` y `SQLAlchemy`.
-* **Control de Versiones (DB):** Gestión de migraciones seguras con `Alembic`.
-* **Validación Estricta:** Filtrado y serialización de datos de entrada/salida usando esquemas de `Pydantic`.
+## Caracteristicas
 
-## 🛠️ Stack Tecnológico
+- Registro de usuarios.
+- Login con JWT.
+- Hash de contrasenas con Passlib y bcrypt.
+- CRUD basico de vehiculos.
+- CRUD basico de mantenimientos asociados a vehiculos.
+- Base de datos PostgreSQL.
+- Migraciones con Alembic.
+- Dockerizacion con Docker Compose para levantar API y base de datos.
 
-* **Framework:** [FastAPI](https://fastapi.tiangolo.com/)
-* **Lenguaje:** Python 3.10+
-* **Base de Datos:** PostgreSQL
-* **ORM:** SQLAlchemy (Async)
-* **Migraciones:** Alembic
-* **Seguridad:** PyJWT, Passlib[bcrypt]
+## Stack tecnologico
 
-## 📋 Estructura de Endpoints (API)
+- Python
+- FastAPI
+- PostgreSQL
+- SQLAlchemy Async
+- Alembic
+- Pydantic
+- PyJWT
+- Docker
+- Docker Compose
 
-| Método | Endpoint             | Descripción                                      | Acceso |
-| :---   | :---                 | :---                                             | :---   |
-| `POST` | `/usuarios/login`    | Autenticación de mecánicos y generación de Token | Público|
-| `GET`  | `/vehiculos/`        | Obtiene el listado de vehículos registrados      | Público|
-| `POST` | `/vehiculos/`        | Registra un nuevo vehículo en el taller          | 🔒 JWT |
-| `PUT`  | `/vehiculos/{id}`    | Actualiza los datos de un vehículo existente     | 🔒 JWT |
-| `DELETE`| `/vehiculos/{id}`   | Elimina un vehículo del registro del taller      | 🔒 JWT |
+## Endpoints principales
 
-### Ejemplo de Payload (POST `/vehiculos/`)
+| Metodo | Endpoint | Descripcion | Acceso |
+| --- | --- | --- | --- |
+| `POST` | `/usuarios/` | Registra un usuario | Publico |
+| `POST` | `/usuarios/login` | Inicia sesion y devuelve un token JWT | Publico |
+| `GET` | `/vehiculos/` | Lista los vehiculos registrados | Publico |
+| `POST` | `/vehiculos/` | Registra un vehiculo | JWT |
+| `PUT` | `/vehiculos/{vehiculo_id}` | Actualiza un vehiculo | JWT |
+| `DELETE` | `/vehiculos/{vehiculo_id}` | Elimina un vehiculo | JWT |
+| `GET` | `/mantenimientos/` | Lista mantenimientos | Publico |
+| `GET` | `/mantenimientos/{mantenimiento_id}` | Obtiene un mantenimiento | Publico |
+| `POST` | `/mantenimientos/` | Crea un mantenimiento | JWT |
+| `PUT` | `/mantenimientos/{mantenimiento_id}` | Actualiza un mantenimiento | JWT |
+| `DELETE` | `/mantenimientos/{mantenimiento_id}` | Elimina un mantenimiento | JWT |
+
+## Ejecutar con Docker
+
+Requisitos:
+
+- Docker Desktop instalado y corriendo.
+- Docker Compose disponible.
+
+Levantar la API y PostgreSQL:
+
+```powershell
+docker compose up --build
+```
+
+La API quedara disponible en:
+
+```text
+http://localhost:8000
+```
+
+La documentacion interactiva de FastAPI estara en:
+
+```text
+http://localhost:8000/docs
+```
+
+En otra terminal, aplicar migraciones:
+
+```powershell
+docker compose exec api alembic upgrade head
+```
+
+Detener los contenedores:
+
+```powershell
+docker compose down
+```
+
+Detener los contenedores y eliminar el volumen de PostgreSQL:
+
+```powershell
+docker compose down -v
+```
+
+> Nota: `docker compose down -v` borra los datos guardados en la base de datos del contenedor.
+
+## Variables de entorno en Docker
+
+El archivo `docker-compose.yml` define variables de entorno de desarrollo para la API:
+
+```yaml
+DATABASE_URL: postgresql+asyncpg://taller_user:taller_password@db:5432/taller_db
+SECRET_KEY: clave_de_desarrollo_para_docker
+ALGORITHM: HS256
+ACCESS_TOKEN_EXPIRE_MINUTES: 60
+```
+
+Dentro de Docker Compose, la API se conecta a PostgreSQL usando el nombre del servicio `db`.
+
+## Ejemplos de payload
+
+Crear usuario:
+
+```json
+{
+  "email": "mecanico@example.com",
+  "password": "password123"
+}
+```
+
+Crear vehiculo:
+
 ```json
 {
   "placa": "XYZ-123",
-  "marca": "Hero",
-  "modelo": "Hunk 150 XTEC"
+  "marca": "Toyota",
+  "modelo": "Corolla"
 }
+```
+
+Crear mantenimiento:
+
+```json
+{
+  "vehiculo_id": 1,
+  "descripcion": "Cambio de aceite y revision general",
+  "estado": "pendiente",
+  "costo_estimado": 120000
+}
+```
+
+## Ejecutar sin Docker
+
+Crear y activar un entorno virtual:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\activate
+```
+
+Instalar dependencias:
+
+```powershell
+pip install -r requirements.txt
+```
+
+Configurar variables de entorno en `.env` tomando como referencia `.env.example`.
+
+Aplicar migraciones:
+
+```powershell
+alembic upgrade head
+```
+
+Ejecutar la API:
+
+```powershell
+uvicorn app.main:app --reload
+```

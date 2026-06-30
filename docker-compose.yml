@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:16
+    container_name: taller-db
+    environment:
+      POSTGRES_DB: taller_db
+      POSTGRES_USER: taller_user
+      POSTGRES_PASSWORD: taller_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build: .
+    container_name: taller-api
+    environment:
+      DATABASE_URL: postgresql+asyncpg://taller_user:taller_password@db:5432/taller_db
+      SECRET_KEY: clave_de_desarrollo_para_docker
+      ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: 60
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
