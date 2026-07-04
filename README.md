@@ -161,3 +161,17 @@ Ejecutar la API:
 ```powershell
 uvicorn app.main:app --reload
 ```
+
+## Ejecutar pruebas
+
+Instalar dependencias:
+
+```powershell
+pip install -r requirements.txt
+```
+
+Ejecutar Pytest:
+
+```powershell
+pytest
+```
