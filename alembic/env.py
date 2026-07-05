@@ -1,36 +1,26 @@
 import asyncio
-import os
 from logging.config import fileConfig
-from pathlib import Path
 
-from dotenv import load_dotenv
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-from app import models  # noqa: F401
-from app.database import Base
-from app.models import UsuarioDB, VehiculoDB
 
-# Cargar .env desde la raíz del proyecto
-env_path = Path(__file__).parent.parent / ".env"
-load_dotenv(dotenv_path=env_path)
+# Importar todos los modelos para que Alembic los detecte en autogenerate.
+# El 'noqa: F401' suprime el aviso de "importación no usada" del linter,
+# ya que el efecto de este import es el registro en Base.metadata, no el uso directo.
+from app import models  # noqa: F401
+from app.config import settings
+from app.database import Base
+
+# Alembic toma la URL desde la configuración centralizada de la aplicación.
+# Así se usa siempre la misma fuente de verdad que la API.
+config = context.config
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 target_metadata = Base.metadata
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
-config = context.config
-
-# Inyectar la URL de la base de datos desde la variable de entorno
-database_url = os.environ.get("DATABASE_URL")
-if not database_url:
-    raise ValueError("DATABASE_URL no está configurada en el archivo .env")
-config.set_main_option("sqlalchemy.url", database_url)
-
-# Interpret the config file for Python logging.
-# This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

@@ -44,8 +44,16 @@ async def login(
     resultado = await db.execute(consulta)
     usuario_db = resultado.scalar_one_or_none()
 
-    if not usuario_db or not verificar_password(
-        credenciales.password, usuario_db.hashed_password
+    # Verificamos tres condiciones en orden:
+    # 1. El usuario existe en la DB.
+    # 2. Su cuenta está activa (is_active=True).
+    # 3. La contraseña enviada coincide con el hash almacenado.
+    # Si cualquiera falla, retornamos el mismo error genérico (401)
+    # para no revelar si el email existe o no en el sistema.
+    if (
+        not usuario_db
+        or not usuario_db.is_active
+        or not verificar_password(credenciales.password, usuario_db.hashed_password)
     ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

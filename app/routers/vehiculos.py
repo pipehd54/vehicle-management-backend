@@ -4,19 +4,24 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models import VehiculoDB
-from app.schemas import VehiculoSchema
+from app.models import UsuarioDB, VehiculoDB
+from app.schemas import VehiculoCreate, VehiculoResponse
 from app.security import obtener_usuario_actual
 
 router = APIRouter()
 
 
-@router.post("/")
+@router.post(
+    "/",
+    status_code=status.HTTP_201_CREATED,
+    response_model=VehiculoResponse,
+)
 async def registrar_vehiculo(
-    vehiculo: VehiculoSchema,
+    vehiculo: VehiculoCreate,
     db: AsyncSession = Depends(get_db),
-    usuario_actual: str = Depends(obtener_usuario_actual),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
+    """Crea un nuevo vehículo. Requiere autenticación."""
     nuevo_vehiculo = VehiculoDB(
         placa=vehiculo.placa,
         marca=vehiculo.marca,
@@ -31,36 +36,32 @@ async def registrar_vehiculo(
     except IntegrityError:
         await db.rollback()
         raise HTTPException(
-            status_code=400,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="La placa ya existe en la base de datos",
         )
 
-    return {
-        "mensaje": "Vehículo registrado en PostgreSQL",
-        "data": {
-            "id": nuevo_vehiculo.id,
-            "placa": nuevo_vehiculo.placa,
-        },
-    }
+    # Devolvemos el objeto completo. FastAPI usará response_model para serializarlo
+    return nuevo_vehiculo
 
 
-@router.get("/")
+@router.get("/", response_model=list[VehiculoResponse])
 async def obtener_vehiculos(db: AsyncSession = Depends(get_db)):
+    """Lista todos los vehículos (público según la documentación actual)."""
     consulta = select(VehiculoDB)
     resultado = await db.execute(consulta)
     vehiculos_guardados = resultado.scalars().all()
-    return {"vehiculos": vehiculos_guardados}
+    # Devolvemos la lista directamente. response_model=list[...] se encarga de la serialización
+    return vehiculos_guardados
 
 
-@router.put("/{vehiculo_id}")
+@router.put("/{vehiculo_id}", response_model=VehiculoResponse)
 async def actualizar_vehiculo(
     vehiculo_id: int,
-    vehiculo_actualizado: VehiculoSchema,
+    vehiculo_actualizado: VehiculoCreate,
     db: AsyncSession = Depends(get_db),
-    # 🔒 El candado:
-    usuario_actual: str = Depends(obtener_usuario_actual),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
-
+    """Actualiza un vehículo existente. Requiere autenticación."""
     consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
     resultado = await db.execute(consulta)
     vehiculo_db = resultado.scalar_one_or_none()
@@ -85,16 +86,17 @@ async def actualizar_vehiculo(
             detail="La nueva placa ya esta en uso por otro vehiculo.",
         )
 
-    return {"mensaje": "Vehiculo actualizado con exito", "vehiculo": vehiculo_db}
+    # Devolvemos el objeto actualizado directamente
+    return vehiculo_db
 
 
 @router.delete("/{vehiculo_id}")
 async def eliminar_vehiculo(
     vehiculo_id: int,
     db: AsyncSession = Depends(get_db),
-    # 🔒 El candado:
-    usuario_actual: str = Depends(obtener_usuario_actual),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
+    """Elimina un vehículo. Requiere autenticación."""
 
     consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
     resultado = await db.execute(consulta)

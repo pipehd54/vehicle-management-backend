@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime
 
 from app.database import get_db
-from app.models import MantenimientoDB, VehiculoDB
+from app.models import MantenimientoDB, UsuarioDB, VehiculoDB
 from app.schemas import (
     MantenimientoCreate,
     MantenimientoResponse,
@@ -37,7 +37,7 @@ async def obtener_vehiculo_o_404(vehiculo_id: int, db: AsyncSession) -> Vehiculo
 async def crear_mantenimiento(
     mantenimiento: MantenimientoCreate,
     db: AsyncSession = Depends(get_db),
-    usuario_actual: str = Depends(obtener_usuario_actual),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
     await obtener_vehiculo_o_404(mantenimiento.vehiculo_id, db)
 
@@ -92,7 +92,7 @@ async def actualizar_mantenimiento(
     mantenimiento_id: int,
     mantenimiento_actualizado: MantenimientoUpdate,
     db: AsyncSession = Depends(get_db),
-    usuario_actual: str = Depends(obtener_usuario_actual),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
     consulta = select(MantenimientoDB).where(MantenimientoDB.id == mantenimiento_id)
     resultado = await db.execute(consulta)
@@ -118,7 +118,7 @@ async def actualizar_mantenimiento(
 async def eliminar_mantenimiento(
     mantenimiento_id: int,
     db: AsyncSession = Depends(get_db),
-    usuario_actual: str = Depends(obtener_usuario_actual),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
     consulta = select(MantenimientoDB).where(MantenimientoDB.id == mantenimiento_id)
     resultado = await db.execute(consulta)

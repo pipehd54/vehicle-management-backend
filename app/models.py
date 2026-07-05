@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -9,10 +9,10 @@ from app.database import Base
 class VehiculoDB(Base):
     __tablename__ = "vehiculos"
 
-    id = Column(Integer, primary_key=True, index=True)
-    placa = Column(String(20), unique=True, nullable=False)
-    marca = Column(String(50), nullable=False)
-    modelo = Column(String(50), nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    placa: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    marca: Mapped[str] = mapped_column(String(50), nullable=False)
+    modelo: Mapped[str] = mapped_column(String(50), nullable=False)
 
 
 class UsuarioDB(Base):
@@ -22,9 +22,7 @@ class UsuarioDB(Base):
     email: Mapped[str] = mapped_column(
         String(150), unique=True, index=True, nullable=False
     )
-
     hashed_password: Mapped[str] = mapped_column(String(225), nullable=False)
-
     rol: Mapped[str] = mapped_column(String(50), default="mecanico")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -32,9 +30,15 @@ class UsuarioDB(Base):
 class MantenimientoDB(Base):
     __tablename__ = "mantenimientos"
 
-    id = Column(Integer, primary_key=True, index=True)
-    vehiculo_id = Column(Integer, ForeignKey("vehiculos.id"), nullable=False, index=True)
-    descripcion = Column(Text, nullable=False)
-    estado = Column(String(30), nullable=False, default="pendiente")
-    costo_estimado = Column(Integer, nullable=True)
-    fecha_creacion = Column(DateTime, nullable=False, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    vehiculo_id: Mapped[int] = mapped_column(
+        ForeignKey("vehiculos.id"), nullable=False, index=True
+    )
+    descripcion: Mapped[str] = mapped_column(Text, nullable=False)
+    estado: Mapped[str] = mapped_column(String(30), nullable=False, default="pendiente")
+    costo_estimado: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fecha_creacion: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
