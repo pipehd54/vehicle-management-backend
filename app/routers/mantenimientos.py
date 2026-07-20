@@ -1,7 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import datetime
 
 from app.database import get_db
 from app.models import MantenimientoDB, UsuarioDB, VehiculoDB
