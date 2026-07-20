@@ -58,6 +58,8 @@ async def crear_mantenimiento(
 @router.get("/", response_model=list[MantenimientoResponse])
 async def listar_mantenimientos(
     vehiculo_id: int | None = Query(default=None),
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
 ):
     consulta = select(MantenimientoDB)
@@ -65,7 +67,7 @@ async def listar_mantenimientos(
     if vehiculo_id is not None:
         consulta = consulta.where(MantenimientoDB.vehiculo_id == vehiculo_id)
 
-    resultado = await db.execute(consulta)
+    resultado = await db.execute(consulta.offset(skip).limit(limit))
     return resultado.scalars().all()
 
 

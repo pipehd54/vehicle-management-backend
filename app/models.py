@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 
@@ -13,6 +13,11 @@ class VehiculoDB(Base):
     placa: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     marca: Mapped[str] = mapped_column(String(50), nullable=False)
     modelo: Mapped[str] = mapped_column(String(50), nullable=False)
+    mantenimientos: Mapped[list["MantenimientoDB"]] = relationship(
+        back_populates="vehiculo",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
 
 
 class UsuarioDB(Base):
@@ -32,8 +37,9 @@ class MantenimientoDB(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     vehiculo_id: Mapped[int] = mapped_column(
-        ForeignKey("vehiculos.id"), nullable=False, index=True
+        ForeignKey("vehiculos.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    vehiculo: Mapped["VehiculoDB"] = relationship(back_populates="mantenimientos")
     descripcion: Mapped[str] = mapped_column(Text, nullable=False)
     estado: Mapped[str] = mapped_column(String(30), nullable=False, default="pendiente")
     costo_estimado: Mapped[int | None] = mapped_column(Integer, nullable=True)

@@ -44,6 +44,13 @@ class Settings(BaseSettings):
     # le=10080: máximo 7 días (7 * 24 * 60).
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60, gt=0, le=10080)
 
+    # Orígenes permitidos para el cliente web. Se reciben separados por comas.
+    CORS_ORIGINS: str = "http://localhost:3000"
+
+    @property
+    def cors_origins(self) -> list[str]:
+        return [origen.strip() for origen in self.CORS_ORIGINS.split(",") if origen.strip()]
+
 
 # Instancia única compartida por toda la aplicación.
 # Se crea una sola vez al importar el módulo; si la configuración

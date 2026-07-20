@@ -1,109 +1,171 @@
-# Garage API - Sistema de Gestion de Taller
+# Vehicle Management Backend
 
-API backend simple para gestionar usuarios, vehiculos y mantenimientos de un taller mecanico.
+API REST para apoyar la gestión básica de un taller mecánico. Permite registrar usuarios, autenticar con JWT y administrar vehículos junto con sus mantenimientos.
 
-El objetivo del proyecto es mostrar una base funcional de desarrollo backend con Python, FastAPI, PostgreSQL, SQLAlchemy, Alembic, autenticacion JWT y Docker.
+Este es un proyecto personal de portafolio desarrollado como estudiante de Ingeniería de Sistemas. Su objetivo es practicar la construcción de una API backend con herramientas habituales del ecosistema Python, manteniendo una estructura simple y fácil de entender.
 
-## Caracteristicas
+## Funcionalidades
 
-- Registro de usuarios.
-- Login con JWT.
-- Hash de contrasenas con Passlib y bcrypt.
-- CRUD basico de vehiculos.
-- CRUD basico de mantenimientos asociados a vehiculos.
-- Base de datos PostgreSQL.
-- Migraciones con Alembic.
-- Dockerizacion con Docker Compose para levantar API y base de datos.
+- Registro e inicio de sesión de usuarios.
+- Autenticación mediante tokens JWT.
+- Contraseñas almacenadas con hash de bcrypt.
+- CRUD de vehículos.
+- CRUD de mantenimientos asociados a un vehículo.
+- Paginación en los listados de vehículos y mantenimientos.
+- Health check para comprobar la conexión con la base de datos.
+- Migraciones de base de datos con Alembic.
+- Pruebas automatizadas con SQLite en memoria, sin modificar PostgreSQL.
+- Contenedores para API y PostgreSQL mediante Docker Compose.
 
-## Stack tecnologico
+## Tecnologías
 
-- Python
+- Python 3.12
 - FastAPI
-- PostgreSQL
 - SQLAlchemy Async
+- PostgreSQL
 - Alembic
 - Pydantic
-- PyJWT
-- Docker
-- Docker Compose
+- PyJWT y Passlib/bcrypt
+- Pytest, pytest-asyncio, HTTPX y aiosqlite
+- Docker y Docker Compose
 
-## Endpoints principales
+## Estructura del proyecto
 
-| Metodo | Endpoint | Descripcion | Acceso |
-| --- | --- | --- | --- |
-| `POST` | `/usuarios/` | Registra un usuario | Publico |
-| `POST` | `/usuarios/login` | Inicia sesion y devuelve un token JWT | Publico |
-| `GET` | `/vehiculos/` | Lista los vehiculos registrados | Publico |
-| `POST` | `/vehiculos/` | Registra un vehiculo | JWT |
-| `PUT` | `/vehiculos/{vehiculo_id}` | Actualiza un vehiculo | JWT |
-| `DELETE` | `/vehiculos/{vehiculo_id}` | Elimina un vehiculo | JWT |
-| `GET` | `/mantenimientos/` | Lista mantenimientos | Publico |
-| `GET` | `/mantenimientos/{mantenimiento_id}` | Obtiene un mantenimiento | Publico |
-| `POST` | `/mantenimientos/` | Crea un mantenimiento | JWT |
-| `PUT` | `/mantenimientos/{mantenimiento_id}` | Actualiza un mantenimiento | JWT |
-| `DELETE` | `/mantenimientos/{mantenimiento_id}` | Elimina un mantenimiento | JWT |
+```text
+.
+├── alembic/              # Migraciones de la base de datos
+├── app/
+│   ├── routers/          # Endpoints de usuarios, vehículos y mantenimientos
+│   ├── config.py         # Configuración por variables de entorno
+│   ├── database.py       # Motor y sesiones asíncronas
+│   ├── models.py         # Modelos de SQLAlchemy
+│   ├── schemas.py        # Modelos de validación Pydantic
+│   └── security.py       # Hash de contraseñas y JWT
+├── tests/                # Pruebas automatizadas
+├── Dockerfile
+├── docker-compose.yml
+├── requirements.txt
+└── README.md
+```
+
+## Requisitos
+
+- Python 3.12 o superior
+- PostgreSQL 16, si se ejecuta sin Docker
+- Docker Desktop y Docker Compose, si se ejecuta con contenedores
+
+## Variables de entorno
+
+Crea un archivo llamado `.env` en la raíz del proyecto. No debe subirse al repositorio.
+
+Para ejecutar la aplicación localmente con PostgreSQL:
+
+```env
+DATABASE_URL=postgresql+asyncpg://taller_user:tu_password@localhost:5432/taller_db
+SECRET_KEY=una_clave_larga_y_secreta_de_al_menos_32_caracteres
+ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+CORS_ORIGINS=http://localhost:3000
+```
+
+Para Docker Compose, usa el nombre del servicio `db` como host y define además la contraseña de PostgreSQL:
+
+```env
+POSTGRES_DB=taller_db
+POSTGRES_USER=taller_user
+POSTGRES_PASSWORD=tu_password
+DATABASE_URL=postgresql+asyncpg://taller_user:tu_password@db:5432/taller_db
+SECRET_KEY=una_clave_larga_y_secreta_de_al_menos_32_caracteres
+```
+
+`CORS_ORIGINS` admite varios orígenes separados por comas, por ejemplo: `http://localhost:3000,http://localhost:5173`.
 
 ## Ejecutar con Docker
 
-Requisitos:
-
-- Docker Desktop instalado y corriendo.
-- Docker Compose disponible.
-
-Levantar la API y PostgreSQL:
+1. Crea el archivo `.env` con las variables del apartado anterior.
+2. Construye e inicia los servicios:
 
 ```powershell
 docker compose up --build
 ```
 
-La API quedara disponible en:
-
-```text
-http://localhost:8000
-```
-
-La documentacion interactiva de FastAPI estara en:
-
-```text
-http://localhost:8000/docs
-```
-
-En otra terminal, aplicar migraciones:
+3. En otra terminal, aplica las migraciones:
 
 ```powershell
 docker compose exec api alembic upgrade head
 ```
 
-Detener los contenedores:
+La API estará disponible en `http://localhost:8000` y la documentación interactiva en `http://localhost:8000/docs`.
+
+Para detener los servicios:
 
 ```powershell
 docker compose down
 ```
 
-Detener los contenedores y eliminar el volumen de PostgreSQL:
+## Ejecutar localmente
+
+1. Crea y activa un entorno virtual:
 
 ```powershell
-docker compose down -v
+python -m venv .venv
+.\.venv\Scripts\activate
 ```
 
-> Nota: `docker compose down -v` borra los datos guardados en la base de datos del contenedor.
+2. Instala las dependencias:
 
-## Variables de entorno en Docker
-
-El archivo `docker-compose.yml` define variables de entorno de desarrollo para la API:
-
-```yaml
-DATABASE_URL: postgresql+asyncpg://taller_user:taller_password@db:5432/taller_db
-SECRET_KEY: clave_de_desarrollo_para_docker
-ALGORITHM: HS256
-ACCESS_TOKEN_EXPIRE_MINUTES: 60
+```powershell
+pip install -r requirements.txt
 ```
 
-Dentro de Docker Compose, la API se conecta a PostgreSQL usando el nombre del servicio `db`.
+3. Crea la base de datos en PostgreSQL y configura el archivo `.env`.
 
-## Ejemplos de payload
+4. Aplica las migraciones:
 
-Crear usuario:
+```powershell
+alembic upgrade head
+```
+
+5. Inicia la API:
+
+```powershell
+uvicorn app.main:app --reload
+```
+
+## Endpoints principales
+
+| Método | Endpoint | Descripción | Acceso |
+| --- | --- | --- | --- |
+| `GET` | `/` | Mensaje de bienvenida | Público |
+| `GET` | `/health` | Estado de la API y la base de datos | Público |
+| `POST` | `/usuarios/` | Registra un usuario | Público |
+| `POST` | `/usuarios/login` | Devuelve un token JWT | Público |
+| `GET` | `/vehiculos/` | Lista vehículos paginados | Público |
+| `GET` | `/vehiculos/{vehiculo_id}` | Consulta un vehículo | Público |
+| `POST` | `/vehiculos/` | Crea un vehículo | JWT |
+| `PUT` | `/vehiculos/{vehiculo_id}` | Actualiza un vehículo | JWT |
+| `DELETE` | `/vehiculos/{vehiculo_id}` | Elimina un vehículo y sus mantenimientos | JWT |
+| `GET` | `/mantenimientos/` | Lista mantenimientos paginados y filtrables | Público |
+| `GET` | `/mantenimientos/{mantenimiento_id}` | Consulta un mantenimiento | Público |
+| `POST` | `/mantenimientos/` | Crea un mantenimiento | JWT |
+| `PUT` | `/mantenimientos/{mantenimiento_id}` | Actualiza un mantenimiento | JWT |
+| `DELETE` | `/mantenimientos/{mantenimiento_id}` | Elimina un mantenimiento | JWT |
+
+### Paginación y filtro
+
+Los listados aceptan los parámetros `skip` y `limit`:
+
+```text
+GET /vehiculos/?skip=0&limit=20
+GET /mantenimientos/?skip=0&limit=20
+GET /mantenimientos/?vehiculo_id=1&skip=0&limit=20
+```
+
+`skip` empieza en `0`. `limit` tiene un valor por defecto de `20` y acepta un máximo de `100`.
+
+## Ejemplos de uso
+
+Registrar un usuario:
 
 ```json
 {
@@ -112,7 +174,7 @@ Crear usuario:
 }
 ```
 
-Crear vehiculo:
+Crear un vehículo:
 
 ```json
 {
@@ -122,56 +184,33 @@ Crear vehiculo:
 }
 ```
 
-Crear mantenimiento:
+Crear un mantenimiento:
 
 ```json
 {
   "vehiculo_id": 1,
-  "descripcion": "Cambio de aceite y revision general",
+  "descripcion": "Cambio de aceite y revisión general",
   "estado": "pendiente",
   "costo_estimado": 120000
 }
 ```
 
-## Ejecutar sin Docker
+En los endpoints protegidos, incluye el token obtenido en el login:
 
-Crear y activar un entorno virtual:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\activate
+```text
+Authorization: Bearer <access_token>
 ```
 
-Instalar dependencias:
+## Pruebas
+
+Las pruebas usan SQLite asíncrono en memoria. No se conectan ni modifican tu instancia de PostgreSQL.
 
 ```powershell
-pip install -r requirements.txt
+pytest -q
 ```
 
-Configurar variables de entorno en `.env` tomando como referencia `.env.example`.
+La suite cubre autenticación, autorización sin token, CRUD de vehículos, CRUD de mantenimientos, paginación, filtros y borrado en cascada.
 
-Aplicar migraciones:
+## Próximos pasos
 
-```powershell
-alembic upgrade head
-```
-
-Ejecutar la API:
-
-```powershell
-uvicorn app.main:app --reload
-```
-
-## Ejecutar pruebas
-
-Instalar dependencias:
-
-```powershell
-pip install -r requirements.txt
-```
-
-Ejecutar Pytest:
-
-```powershell
-pytest
-```
+Algunas mejoras que me gustaría explorar mientras continúo aprendiendo son permisos por usuario o taller, una interfaz web y despliegue en la nube.

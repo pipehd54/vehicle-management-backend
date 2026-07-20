@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -45,13 +45,32 @@ async def registrar_vehiculo(
 
 
 @router.get("/", response_model=list[VehiculoResponse])
-async def obtener_vehiculos(db: AsyncSession = Depends(get_db)):
+async def obtener_vehiculos(
+    skip: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
     """Lista todos los vehículos (público según la documentación actual)."""
-    consulta = select(VehiculoDB)
+    consulta = select(VehiculoDB).offset(skip).limit(limit)
     resultado = await db.execute(consulta)
     vehiculos_guardados = resultado.scalars().all()
     # Devolvemos la lista directamente. response_model=list[...] se encarga de la serialización
     return vehiculos_guardados
+
+
+@router.get("/{vehiculo_id}", response_model=VehiculoResponse)
+async def obtener_vehiculo(vehiculo_id: int, db: AsyncSession = Depends(get_db)):
+    """Obtiene un vehículo por su identificador."""
+    consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
+    resultado = await db.execute(consulta)
+    vehiculo = resultado.scalar_one_or_none()
+
+    if not vehiculo:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Vehiculo no encontrado"
+        )
+
+    return vehiculo
 
 
 @router.put("/{vehiculo_id}", response_model=VehiculoResponse)
