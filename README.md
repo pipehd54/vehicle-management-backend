@@ -4,8 +4,6 @@ API REST para apoyar la gestión básica de un taller mecánico. Permite registr
 
 Este es un proyecto personal de portafolio desarrollado como estudiante de Ingeniería de Sistemas. Su objetivo es practicar la construcción de una API backend con herramientas habituales del ecosistema Python, manteniendo una estructura simple y fácil de entender.
 
-# Vehicle Management Backend
-
 **API en producción:** [https://vehicle-management-backend-production-xxx.up.railway.app](https://vehicle-management-backend-production-e9f4.up.railway.app/)  
 **Documentación interactiva:** [https://vehicle-management-backend-production-xxx.up.railway.app/docs](https://vehicle-management-backend-production-e9f4.up.railway.app/docs)
 
