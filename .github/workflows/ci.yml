@@ -52,7 +52,7 @@ jobs:
           SECRET_KEY: test-secret-key-for-ci-only
           ALGORITHM: HS256
           ACCESS_TOKEN_EXPIRE_MINUTES: 60
-        run: pytest -q
+        run: python -m pytest -q
 
       # 5. Verifica formato con ruff (linter)
       - name: Lint with ruff
