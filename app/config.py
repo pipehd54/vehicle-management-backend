@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Ruta absoluta al archivo .env en la raíz del proyecto,
@@ -30,6 +30,17 @@ class Settings(BaseSettings):
     # --- Base de datos ---
     DATABASE_URL: str
 
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def normalizar_database_url(cls, v: str) -> str:
+        """Asegura que las URLs provistas por Railway (postgres:// o postgresql://) usen el dialecto asyncpg."""
+        if isinstance(v, str):
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql+asyncpg://", 1)
+            if v.startswith("postgresql://") and not v.startswith("postgresql+asyncpg://"):
+                return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
+
     # --- Seguridad JWT ---
     # SecretStr es un tipo especial de Pydantic: nunca imprime el valor
     # real en logs ni en representaciones de texto. Para leer el valor
@@ -45,7 +56,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=60, gt=0, le=10080)
 
     # Orígenes permitidos para el cliente web. Se reciben separados por comas.
-    CORS_ORIGINS: str = "http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173"
 
     @property
     def cors_origins(self) -> list[str]:

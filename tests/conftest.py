@@ -56,7 +56,7 @@ async def cliente(base_de_datos):
 async def usuario_prueba(cliente):
     respuesta = await cliente.post(
         "/usuarios/",
-        json={"email": "mecanico@example.com", "password": "password123"},
+        json={"email": "mecanico@example.com", "password": "password123", "rol": "mecanico"},
     )
     assert respuesta.status_code == 201
     return respuesta.json()
@@ -75,3 +75,24 @@ async def token_valido(cliente, usuario_prueba):
 @pytest_asyncio.fixture
 async def headers_autorizacion(token_valido):
     return {"Authorization": f"Bearer {token_valido}"}
+
+
+@pytest_asyncio.fixture
+async def admin_prueba(cliente):
+    respuesta = await cliente.post(
+        "/usuarios/",
+        json={"email": "admin@example.com", "password": "password123", "rol": "administrador"},
+    )
+    assert respuesta.status_code == 201
+    return respuesta.json()
+
+
+@pytest_asyncio.fixture
+async def headers_admin(cliente, admin_prueba):
+    respuesta = await cliente.post(
+        "/usuarios/login",
+        data={"username": admin_prueba["email"], "password": "password123"},
+    )
+    assert respuesta.status_code == 200
+    token = respuesta.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}

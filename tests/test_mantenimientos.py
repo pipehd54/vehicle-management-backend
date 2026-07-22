@@ -71,12 +71,25 @@ async def test_actualizar_mantenimiento(cliente, headers_autorizacion):
 
 
 @pytest.mark.asyncio
-async def test_eliminar_mantenimiento(cliente, headers_autorizacion):
+async def test_eliminar_mantenimiento_denegado_para_mecanico(cliente, headers_autorizacion):
     vehiculo = await crear_vehiculo(cliente, headers_autorizacion)
     creado = await crear_mantenimiento(cliente, headers_autorizacion, vehiculo["id"])
 
     respuesta = await cliente.delete(
         f"/mantenimientos/{creado.json()['id']}", headers=headers_autorizacion
+    )
+
+    assert respuesta.status_code == 403
+    assert "administrador" in respuesta.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_eliminar_mantenimiento_como_admin(cliente, headers_autorizacion, headers_admin):
+    vehiculo = await crear_vehiculo(cliente, headers_autorizacion)
+    creado = await crear_mantenimiento(cliente, headers_autorizacion, vehiculo["id"])
+
+    respuesta = await cliente.delete(
+        f"/mantenimientos/{creado.json()['id']}", headers=headers_admin
     )
 
     assert respuesta.status_code == 200

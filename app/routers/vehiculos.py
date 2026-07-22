@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.depends import requiere_admin
 from app.models import UsuarioDB, VehiculoDB
 from app.schemas import VehiculoCreate, VehiculoResponse
 from app.security import obtener_usuario_actual
@@ -113,9 +114,9 @@ async def actualizar_vehiculo(
 async def eliminar_vehiculo(
     vehiculo_id: int,
     db: AsyncSession = Depends(get_db),
-    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
+    admin_actual: UsuarioDB = Depends(requiere_admin),
 ):
-    """Elimina un vehículo. Requiere autenticación."""
+    """Elimina un vehículo. Requiere rol de administrador."""
 
     consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
     resultado = await db.execute(consulta)

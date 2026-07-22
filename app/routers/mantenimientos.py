@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.depends import requiere_admin
 from app.models import MantenimientoDB, UsuarioDB, VehiculoDB
 from app.schemas import (
     MantenimientoCreate,
@@ -119,7 +120,7 @@ async def actualizar_mantenimiento(
 async def eliminar_mantenimiento(
     mantenimiento_id: int,
     db: AsyncSession = Depends(get_db),
-    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
+    admin_actual: UsuarioDB = Depends(requiere_admin),
 ):
     consulta = select(MantenimientoDB).where(MantenimientoDB.id == mantenimiento_id)
     resultado = await db.execute(consulta)

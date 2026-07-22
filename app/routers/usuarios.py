@@ -18,7 +18,7 @@ async def registrar_usuario(usuario: UsuarioCreate, db: AsyncSession = Depends(g
     contrasena_encriptada = obtener_hash_password(usuario.password)
 
     nuevo_usuario = UsuarioDB(
-        email=usuario.email, hashed_password=contrasena_encriptada, rol="mecanico"
+        email=usuario.email, hashed_password=contrasena_encriptada, rol=usuario.rol
     )
 
     db.add(nuevo_usuario)
@@ -61,6 +61,6 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = crear_token_acceso(data={"sub": usuario_db.email})
+    token = crear_token_acceso(data={"sub": usuario_db.email, "rol": usuario_db.rol})
 
     return {"access_token": token, "token_type": "bearer"}

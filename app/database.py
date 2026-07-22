@@ -10,8 +10,12 @@ class Base(DeclarativeBase):
 
 
 # Motor de conexión asíncrono a la base de datos.
-# La URL viene de settings, que la validó y cargó desde .env al arrancar.
-engine = create_async_engine(settings.DATABASE_URL)
+# pool_pre_ping=True verifica la salud de las conexiones inactivas en producción (ej. Railway)
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=300,
+)
 
 # Fábrica de sesiones asíncronas.
 # expire_on_commit=False evita el lazy-loading problemático
@@ -24,4 +28,4 @@ async_session = async_sessionmaker(bind=engine, expire_on_commit=False)
 # correctamente al terminar, incluso si ocurre una excepción.
 async def get_db():
     async with async_session() as session:
-        yield session
+        yield session

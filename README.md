@@ -2,18 +2,24 @@
 
 ![CI](https://github.com/pipehd54/vehicle-management-backend/actions/workflows/ci.yml/badge.svg)
 
-API REST para apoyar la gestión básica de un taller mecánico. Permite registrar usuarios, autenticar con JWT y administrar vehículos junto con sus mantenimientos.
+API REST para apoyar la gestión básica de un taller mecánico. Permite registrar usuarios, autenticar con JWT y administrar vehículos junto con sus mantenimientos mediante un control de acceso basado en roles (RBAC).
 
 Este es un proyecto personal de portafolio desarrollado como estudiante de Ingeniería de Sistemas. Su objetivo es practicar la construcción de una API backend con herramientas habituales del ecosistema Python, manteniendo una estructura simple y fácil de entender.
 
-**API en producción:** [https://vehicle-management-backend-production-xxx.up.railway.app](https://vehicle-management-backend-production-e9f4.up.railway.app/)  
-**Documentación interactiva:** [https://vehicle-management-backend-production-xxx.up.railway.app/docs](https://vehicle-management-backend-production-e9f4.up.railway.app/docs)
+- **🌐 Frontend en producción (Vercel):** [https://vehicle-management-frontend-ruby.vercel.app/](https://vehicle-management-frontend-ruby.vercel.app/)
+- **🚀 API en producción (Railway):** [https://vehicle-management-backend-production-e9f4.up.railway.app](https://vehicle-management-backend-production-e9f4.up.railway.app/)
+- **📖 Documentación interactiva:** [https://vehicle-management-backend-production-e9f4.up.railway.app/docs](https://vehicle-management-backend-production-e9f4.up.railway.app/docs)
+
+---
 
 ## Funcionalidades
 
 - Registro e inicio de sesión de usuarios.
 - Autenticación mediante tokens JWT.
-- Contraseñas almacenadas con hash de bcrypt.
+- Contraseñas almacenadas con hash seguro de bcrypt.
+- Control de Acceso Basado en Roles (RBAC):
+  - **Mecánico:** Crear/Consultar vehículos y crear/actualizar mantenimientos.
+  - **Administrador:** Además de las funciones anteriores, tiene permisos exclusivos para eliminar registros.
 - CRUD de vehículos.
 - CRUD de mantenimientos asociados a un vehículo.
 - Paginación en los listados de vehículos y mantenimientos.
@@ -29,8 +35,8 @@ Este es un proyecto personal de portafolio desarrollado como estudiante de Ingen
 - SQLAlchemy Async
 - PostgreSQL
 - Alembic
-- Pydantic
-- PyJWT y Passlib/bcrypt
+- Pydantic v2
+- PyJWT y bcrypt
 - Pytest, pytest-asyncio, HTTPX y aiosqlite
 - Docker y Docker Compose
 
@@ -43,6 +49,7 @@ Este es un proyecto personal de portafolio desarrollado como estudiante de Ingen
 │   ├── routers/          # Endpoints de usuarios, vehículos y mantenimientos
 │   ├── config.py         # Configuración por variables de entorno
 │   ├── database.py       # Motor y sesiones asíncronas
+│   ├── depends.py        # Dependencias de seguridad y roles (RBAC)
 │   ├── models.py         # Modelos de SQLAlchemy
 │   ├── schemas.py        # Modelos de validación Pydantic
 │   └── security.py       # Hash de contraseñas y JWT
@@ -70,7 +77,7 @@ DATABASE_URL=postgresql+asyncpg://taller_user:tu_password@localhost:5432/taller_
 SECRET_KEY=una_clave_larga_y_secreta_de_al_menos_32_caracteres
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
-CORS_ORIGINS=http://localhost:3000
+CORS_ORIGINS=http://localhost:3000,http://localhost:5173,https://vehicle-management-frontend-ruby.vercel.app
 ```
 
 Para Docker Compose, usa el nombre del servicio `db` como host y define además la contraseña de PostgreSQL:
@@ -83,7 +90,7 @@ DATABASE_URL=postgresql+asyncpg://taller_user:tu_password@db:5432/taller_db
 SECRET_KEY=una_clave_larga_y_secreta_de_al_menos_32_caracteres
 ```
 
-`CORS_ORIGINS` admite varios orígenes separados por comas, por ejemplo: `http://localhost:3000,http://localhost:5173`.
+`CORS_ORIGINS` admite varios orígenes separados por comas, por ejemplo: `http://localhost:3000,http://localhost:5173,https://vehicle-management-frontend-ruby.vercel.app`.
 
 ## Ejecutar con Docker
 
@@ -143,18 +150,18 @@ uvicorn app.main:app --reload
 | --- | --- | --- | --- |
 | `GET` | `/` | Mensaje de bienvenida | Público |
 | `GET` | `/health` | Estado de la API y la base de datos | Público |
-| `POST` | `/usuarios/` | Registra un usuario | Público |
+| `POST` | `/usuarios/` | Registra un usuario (mecanico/administrador) | Público |
 | `POST` | `/usuarios/login` | Devuelve un token JWT | Público |
 | `GET` | `/vehiculos/` | Lista vehículos paginados | Público |
 | `GET` | `/vehiculos/{vehiculo_id}` | Consulta un vehículo | Público |
 | `POST` | `/vehiculos/` | Crea un vehículo | JWT |
 | `PUT` | `/vehiculos/{vehiculo_id}` | Actualiza un vehículo | JWT |
-| `DELETE` | `/vehiculos/{vehiculo_id}` | Elimina un vehículo y sus mantenimientos | JWT |
+| `DELETE` | `/vehiculos/{vehiculo_id}` | Elimina un vehículo y sus mantenimientos | JWT (Solo Admin) |
 | `GET` | `/mantenimientos/` | Lista mantenimientos paginados y filtrables | Público |
 | `GET` | `/mantenimientos/{mantenimiento_id}` | Consulta un mantenimiento | Público |
 | `POST` | `/mantenimientos/` | Crea un mantenimiento | JWT |
 | `PUT` | `/mantenimientos/{mantenimiento_id}` | Actualiza un mantenimiento | JWT |
-| `DELETE` | `/mantenimientos/{mantenimiento_id}` | Elimina un mantenimiento | JWT |
+| `DELETE` | `/mantenimientos/{mantenimiento_id}` | Elimina un mantenimiento | JWT (Solo Admin) |
 
 ### Paginación y filtro
 
@@ -175,7 +182,8 @@ Registrar un usuario:
 ```json
 {
   "email": "mecanico@example.com",
-  "password": "password123"
+  "password": "password123",
+  "rol": "mecanico"
 }
 ```
 
@@ -214,8 +222,4 @@ Las pruebas usan SQLite asíncrono en memoria. No se conectan ni modifican tu in
 pytest -q
 ```
 
-La suite cubre autenticación, autorización sin token, CRUD de vehículos, CRUD de mantenimientos, paginación, filtros y borrado en cascada.
-
-## Próximos pasos
-
-Algunas mejoras que me gustaría explorar mientras continúo aprendiendo son permisos por usuario o taller, una interfaz web y despliegue en la nube.
+La suite cubre autenticación, autorización sin token, control de acceso RBAC por rol de administrador vs mecánico, CRUD de vehículos, CRUD de mantenimientos, paginación, filtros y borrado en cascada.
