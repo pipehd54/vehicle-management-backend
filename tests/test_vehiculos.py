@@ -4,7 +4,7 @@ import pytest
 async def crear_vehiculo(cliente, headers, placa="ABC-123"):
     return await cliente.post(
         "/vehiculos/",
-        json={"placa": placa, "marca": "Toyota", "modelo": "Corolla"},
+        json={"placa": placa, "marca": "Toyota", "modelo": "Corolla", "tipo": "carro", "kilometraje_actual": 0},
         headers=headers,
     )
 
@@ -15,6 +15,7 @@ async def test_crear_vehiculo_autenticado(cliente, headers_autorizacion):
 
     assert respuesta.status_code == 201
     assert respuesta.json()["placa"] == "ABC-123"
+    assert respuesta.json()["tipo"] == "carro"
 
 
 @pytest.mark.asyncio
@@ -46,12 +47,37 @@ async def test_actualizar_vehiculo(cliente, headers_autorizacion):
 
     respuesta = await cliente.put(
         f"/vehiculos/{creado.json()['id']}",
-        json={"placa": "XYZ-987", "marca": "Mazda", "modelo": "3"},
+        json={"placa": "XYZ-987", "marca": "Mazda", "modelo": "3", "tipo": "carro", "kilometraje_actual": 15000},
         headers=headers_autorizacion,
     )
 
     assert respuesta.status_code == 200
     assert respuesta.json()["marca"] == "Mazda"
+    assert respuesta.json()["kilometraje_actual"] == 15000
+
+
+@pytest.mark.asyncio
+async def test_proximo_mantenimiento_recomendado(cliente, headers_autorizacion):
+    creado = await cliente.post(
+        "/vehiculos/",
+        json={
+            "placa": "HER-999",
+            "marca": "Hero",
+            "modelo": "Eco 100",
+            "tipo": "motocicleta",
+            "kilometraje_actual": 2500,
+        },
+        headers=headers_autorizacion,
+    )
+    assert creado.status_code == 201
+    vehiculo_id = creado.json()["id"]
+
+    respuesta = await cliente.get(f"/vehiculos/{vehiculo_id}/proximo-mantenimiento")
+    assert respuesta.status_code == 200
+    datos = respuesta.json()
+    assert datos["servicio_numero"] == "2do Servicio de Mantenimiento"
+    assert datos["kilometraje_objetivo"] == 3000
+    assert datos["meses_desde_compra"] == 3
 
 
 @pytest.mark.asyncio

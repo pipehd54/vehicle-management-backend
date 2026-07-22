@@ -46,6 +46,8 @@ async def crear_mantenimiento(
         descripcion=mantenimiento.descripcion,
         estado=mantenimiento.estado,
         costo_estimado=mantenimiento.costo_estimado,
+        kilometraje=mantenimiento.kilometraje,
+        fecha_programada=mantenimiento.fecha_programada,
     )
 
     db.add(nuevo_mantenimiento)
@@ -109,6 +111,8 @@ async def actualizar_mantenimiento(
     mantenimiento.descripcion = mantenimiento_actualizado.descripcion
     mantenimiento.estado = mantenimiento_actualizado.estado
     mantenimiento.costo_estimado = mantenimiento_actualizado.costo_estimado
+    mantenimiento.kilometraje = mantenimiento_actualizado.kilometraje
+    mantenimiento.fecha_programada = mantenimiento_actualizado.fecha_programada
 
     await db.commit()
     await db.refresh(mantenimiento)

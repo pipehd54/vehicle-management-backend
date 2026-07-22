@@ -13,6 +13,10 @@ class VehiculoDB(Base):
     placa: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
     marca: Mapped[str] = mapped_column(String(50), nullable=False)
     modelo: Mapped[str] = mapped_column(String(50), nullable=False)
+    tipo: Mapped[str] = mapped_column(String(20), default="carro", nullable=False)
+    kilometraje_actual: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
+    fecha_compra: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     mantenimientos: Mapped[list["MantenimientoDB"]] = relationship(
         back_populates="vehiculo",
         cascade="all, delete-orphan",
@@ -43,6 +47,8 @@ class MantenimientoDB(Base):
     descripcion: Mapped[str] = mapped_column(Text, nullable=False)
     estado: Mapped[str] = mapped_column(String(30), nullable=False, default="pendiente")
     costo_estimado: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    kilometraje: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fecha_programada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     fecha_creacion: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
