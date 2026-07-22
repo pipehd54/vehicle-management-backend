@@ -77,7 +77,7 @@ async def obtener_vehiculo(vehiculo_id: int, db: AsyncSession = Depends(get_db))
 
 @router.get("/{vehiculo_id}/proximo-mantenimiento", response_model=ProximoMantenimientoResponse)
 async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession = Depends(get_db)):
-    """Calcula el próximo mantenimiento sugerido basado en kilometraje, mantenimientos completados y tiempo de compra."""
+    """Calcula el próximo mantenimiento sugerido basado en la tabla oficial del manual de mantenimiento."""
     consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
     resultado = await db.execute(consulta)
     vehiculo = resultado.scalar_one_or_none()
@@ -87,10 +87,14 @@ async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession =
             status_code=status.HTTP_404_NOT_FOUND, detail="Vehiculo no encontrado"
         )
 
-    # Consultar mantenimientos completados
-    consulta_m = select(MantenimientoDB).where(
-        MantenimientoDB.vehiculo_id == vehiculo_id,
-        MantenimientoDB.estado == "completado"
+    # Consultar mantenimientos completados ordenados
+    consulta_m = (
+        select(MantenimientoDB)
+        .where(
+            MantenimientoDB.vehiculo_id == vehiculo_id,
+            MantenimientoDB.estado == "completado",
+        )
+        .order_by(MantenimientoDB.fecha_programada.desc(), MantenimientoDB.id.desc())
     )
     res_m = await db.execute(consulta_m)
     completados = res_m.scalars().all()
@@ -115,34 +119,40 @@ async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession =
             siguiente_nivel = 5 + (((km - 12000) // 3000) + 1)
 
     tabla_servicios = {
-        1: ("1er Servicio de Mantenimiento", 500, 2),
-        2: ("2do Servicio de Mantenimiento", 3000, 3),
-        3: ("3er Servicio de Mantenimiento", 6000, 6),
-        4: ("4to Servicio de Mantenimiento", 9000, 9),
-        5: ("5to Servicio de Mantenimiento", 12000, 12),
+        1: ("1ra Revisión de Mantenimiento", 500, 60),
+        2: ("2da Revisión de Mantenimiento", 3000, 100),
+        3: ("3ra Revisión de Mantenimiento", 6000, 100),
+        4: ("4ta Revisión de Mantenimiento", 9000, 100),
+        5: ("5ta Revisión de Mantenimiento", 12000, 100),
     }
 
     if siguiente_nivel in tabla_servicios:
-        servicio_nombre, km_objetivo, meses = tabla_servicios[siguiente_nivel]
+        servicio_nombre, km_objetivo, dias_desde_anterior = tabla_servicios[siguiente_nivel]
     else:
         num_adicional = siguiente_nivel - 5
-        servicio_nombre = f"{siguiente_nivel}to Servicio de Mantenimiento"
+        servicio_nombre = f"{siguiente_nivel}ta Revisión de Mantenimiento"
         km_objetivo = 12000 + (num_adicional * 3000)
-        meses = 12 + (num_adicional * 3)
+        dias_desde_anterior = 100
 
     km_faltantes = max(0, km_objetivo - km)
 
+    # Calcular la fecha sugerida usando la última revisión completada o fecha_compra
     fecha_sugerida = None
-    if vehiculo.fecha_compra:
-        fecha_sugerida = vehiculo.fecha_compra + timedelta(days=30 * meses)
+    if completados and (completados[0].fecha_programada or completados[0].fecha_creacion):
+        fecha_ref = completados[0].fecha_programada or completados[0].fecha_creacion
+        fecha_sugerida = fecha_ref + timedelta(days=dias_desde_anterior)
+    elif vehiculo.fecha_compra:
+        dias_totales = 60 if siguiente_nivel == 1 else 60 + ((siguiente_nivel - 1) * 100)
+        fecha_sugerida = vehiculo.fecha_compra + timedelta(days=dias_totales)
 
-    descripcion = f"{servicio_nombre} (Objetivo: {km_objetivo:,} km o mes {meses} desde la compra. Faltan {km_faltantes:,} km)."
+    meses_equiv = 2 if siguiente_nivel == 1 else 2 + (siguiente_nivel - 1) * 3
+    descripcion = f"{servicio_nombre} (Objetivo: {km_objetivo:,} km. Faltan {km_faltantes:,} km. Plazo: {dias_desde_anterior} días desde el servicio anterior)."
 
     return ProximoMantenimientoResponse(
         servicio_numero=servicio_nombre,
         kilometraje_objetivo=km_objetivo,
         kilometraje_faltante=km_faltantes,
-        meses_desde_compra=meses,
+        meses_desde_compra=meses_equiv,
         fecha_sugerida=fecha_sugerida,
         descripcion_sugerida=descripcion,
     )

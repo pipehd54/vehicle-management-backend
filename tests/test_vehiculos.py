@@ -75,10 +75,10 @@ async def test_proximo_mantenimiento_recomendado(cliente, headers_autorizacion):
     respuesta = await cliente.get(f"/vehiculos/{vehiculo_id}/proximo-mantenimiento")
     assert respuesta.status_code == 200
     datos = respuesta.json()
-    assert datos["servicio_numero"] == "2do Servicio de Mantenimiento"
+    assert datos["servicio_numero"] == "2da Revisión de Mantenimiento"
     assert datos["kilometraje_objetivo"] == 3000
     assert datos["kilometraje_faltante"] == 500
-    assert datos["meses_desde_compra"] == 3
+    assert datos["meses_desde_compra"] == 5
 
 
 @pytest.mark.asyncio
