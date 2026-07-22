@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.depends import requiere_admin
-from app.models import UsuarioDB, VehiculoDB
+from app.models import MantenimientoDB, UsuarioDB, VehiculoDB
 from app.schemas import ProximoMantenimientoResponse, VehiculoCreate, VehiculoResponse
 from app.security import obtener_usuario_actual
 
@@ -77,7 +77,7 @@ async def obtener_vehiculo(vehiculo_id: int, db: AsyncSession = Depends(get_db))
 
 @router.get("/{vehiculo_id}/proximo-mantenimiento", response_model=ProximoMantenimientoResponse)
 async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession = Depends(get_db)):
-    """Calcula el próximo mantenimiento sugerido basado en kilometraje y tiempo de compra."""
+    """Calcula el próximo mantenimiento sugerido basado en kilometraje, mantenimientos completados y tiempo de compra."""
     consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
     resultado = await db.execute(consulta)
     vehiculo = resultado.scalar_one_or_none()
@@ -87,44 +87,61 @@ async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession =
             status_code=status.HTTP_404_NOT_FOUND, detail="Vehiculo no encontrado"
         )
 
+    # Consultar mantenimientos completados
+    consulta_m = select(MantenimientoDB).where(
+        MantenimientoDB.vehiculo_id == vehiculo_id,
+        MantenimientoDB.estado == "completado"
+    )
+    res_m = await db.execute(consulta_m)
+    completados = res_m.scalars().all()
+    num_completados = len(completados)
+
     km = vehiculo.kilometraje_actual or 0
 
-    if km < 500:
-        servicio_nombre = "1er Servicio de Mantenimiento"
-        km_objetivo = 500
-        meses = 2
-    elif km < 3000:
-        servicio_nombre = "2do Servicio de Mantenimiento"
-        km_objetivo = 3000
-        meses = 3
-    elif km < 6000:
-        servicio_nombre = "3er Servicio de Mantenimiento"
-        km_objetivo = 6000
-        meses = 6
-    elif km < 9000:
-        servicio_nombre = "4to Servicio de Mantenimiento"
-        km_objetivo = 9000
-        meses = 9
-    elif km < 12000:
-        servicio_nombre = "5to Servicio de Mantenimiento"
-        km_objetivo = 12000
-        meses = 12
+    if num_completados >= 1:
+        siguiente_nivel = num_completados + 1
     else:
-        num_adicional = ((km - 12000) // 3000) + 1
-        num_servicio = 5 + num_adicional
-        servicio_nombre = f"{num_servicio}to Servicio de Mantenimiento"
+        if km < 500:
+            siguiente_nivel = 1
+        elif km < 3000:
+            siguiente_nivel = 2
+        elif km < 6000:
+            siguiente_nivel = 3
+        elif km < 9000:
+            siguiente_nivel = 4
+        elif km < 12000:
+            siguiente_nivel = 5
+        else:
+            siguiente_nivel = 5 + (((km - 12000) // 3000) + 1)
+
+    tabla_servicios = {
+        1: ("1er Servicio de Mantenimiento", 500, 2),
+        2: ("2do Servicio de Mantenimiento", 3000, 3),
+        3: ("3er Servicio de Mantenimiento", 6000, 6),
+        4: ("4to Servicio de Mantenimiento", 9000, 9),
+        5: ("5to Servicio de Mantenimiento", 12000, 12),
+    }
+
+    if siguiente_nivel in tabla_servicios:
+        servicio_nombre, km_objetivo, meses = tabla_servicios[siguiente_nivel]
+    else:
+        num_adicional = siguiente_nivel - 5
+        servicio_nombre = f"{siguiente_nivel}to Servicio de Mantenimiento"
         km_objetivo = 12000 + (num_adicional * 3000)
         meses = 12 + (num_adicional * 3)
+
+    km_faltantes = max(0, km_objetivo - km)
 
     fecha_sugerida = None
     if vehiculo.fecha_compra:
         fecha_sugerida = vehiculo.fecha_compra + timedelta(days=30 * meses)
 
-    descripcion = f"{servicio_nombre} (Revisión preventiva a los {km_objetivo:,} km o {meses} meses desde la compra)."
+    descripcion = f"{servicio_nombre} (Objetivo: {km_objetivo:,} km o mes {meses} desde la compra. Faltan {km_faltantes:,} km)."
 
     return ProximoMantenimientoResponse(
         servicio_numero=servicio_nombre,
         kilometraje_objetivo=km_objetivo,
+        kilometraje_faltante=km_faltantes,
         meses_desde_compra=meses,
         fecha_sugerida=fecha_sugerida,
         descripcion_sugerida=descripcion,

@@ -77,6 +77,7 @@ async def test_proximo_mantenimiento_recomendado(cliente, headers_autorizacion):
     datos = respuesta.json()
     assert datos["servicio_numero"] == "2do Servicio de Mantenimiento"
     assert datos["kilometraje_objetivo"] == 3000
+    assert datos["kilometraje_faltante"] == 500
     assert datos["meses_desde_compra"] == 3
 
 

@@ -73,6 +73,7 @@ class MantenimientoResponse(BaseModel):
 class ProximoMantenimientoResponse(BaseModel):
     servicio_numero: str
     kilometraje_objetivo: int
+    kilometraje_faltante: int
     meses_desde_compra: int
     fecha_sugerida: datetime | None = None
     descripcion_sugerida: str
