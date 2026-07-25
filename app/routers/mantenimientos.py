@@ -15,6 +15,9 @@ from app.security import obtener_usuario_actual
 router = APIRouter()
 
 
+# Helper reutilizable: verifica que el vehículo exista antes de crear
+# un mantenimiento asociado. Evita duplicar la lógica de "404 si no existe"
+# en cada endpoint que recibe un vehiculo_id.
 async def obtener_vehiculo_o_404(vehiculo_id: int, db: AsyncSession) -> VehiculoDB:
     consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
     resultado = await db.execute(consulta)

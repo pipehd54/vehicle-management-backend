@@ -17,6 +17,10 @@ class VehiculoDB(Base):
     kilometraje_actual: Mapped[int | None] = mapped_column(Integer, nullable=True, default=0)
     fecha_compra: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Relación uno-a-muchos: al eliminar un vehículo se borran en cascada
+    # todos sus mantenimientos asociados (delete-orphan).
+    # passive_deletes=True permite que la DB maneje el CASCADE a nivel
+    # SQL en lugar de que SQLAlchemy lo haga en memoria.
     mantenimientos: Mapped[list["MantenimientoDB"]] = relationship(
         back_populates="vehiculo",
         cascade="all, delete-orphan",
@@ -49,6 +53,9 @@ class MantenimientoDB(Base):
     costo_estimado: Mapped[int | None] = mapped_column(Integer, nullable=True)
     kilometraje: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fecha_programada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Se usa default=lambda en lugar de default=datetime.now(...) para que
+    # la función se evalúe en el momento de crear el registro (cada vez que
+    # se instancia el modelo), no al importar el módulo.
     fecha_creacion: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

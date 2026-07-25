@@ -7,7 +7,10 @@ class VehiculoCreate(BaseModel):
     placa: str = Field(..., min_length=3, max_length=20, description="Placa del vehículo")
     marca: str = Field(..., min_length=2, max_length=50)
     modelo: str = Field(..., min_length=1, max_length=50)
+    # pattern restringe el tipo a valores fijos del taller — evita
+    # clasificaciones inventadas como "camion" o "moto"
     tipo: str = Field(default="carro", pattern="^(carro|motocicleta)$")
+    # ge=0 impide valores negativos de kilometraje desde la API
     kilometraje_actual: int | None = Field(default=0, ge=0)
     fecha_compra: datetime | None = Field(default=None)
 
@@ -43,7 +46,10 @@ class UsuarioResponse(BaseModel):
 class MantenimientoCreate(BaseModel):
     vehiculo_id: int
     descripcion: str = Field(..., min_length=5, max_length=500)
+    # estado no tiene pattern porque el frontend puede enviar valores
+    # como "pendiente", "en_progreso", "completado", etc.
     estado: str = Field(default="pendiente", max_length=30)
+    # ge=0 evita costos negativos (no tendría sentido en un taller)
     costo_estimado: int | None = Field(default=None, ge=0)
     kilometraje: int | None = Field(default=None, ge=0)
     fecha_programada: datetime | None = Field(default=None)

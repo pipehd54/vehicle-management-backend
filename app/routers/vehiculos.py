@@ -77,7 +77,17 @@ async def obtener_vehiculo(vehiculo_id: int, db: AsyncSession = Depends(get_db))
 
 @router.get("/{vehiculo_id}/proximo-mantenimiento", response_model=ProximoMantenimientoResponse)
 async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession = Depends(get_db)):
-    """Calcula el próximo mantenimiento sugerido basado en la tabla oficial del manual de mantenimiento."""
+    """
+    Calcula el próximo mantenimiento sugerido basado en el manual oficial del taller.
+
+    La lógica sigue este orden:
+      1. Si ya hay mantenimientos completados, el siguiente nivel es el que sigue.
+      2. Si es la primera vez, se deduce el nivel según el kilometraje actual.
+      3. Se consulta una tabla fija para los primeros 5 servicios; más allá,
+         se extrapola cada 3000 km.
+      4. La fecha sugerida se calcula a partir del último servicio completado
+         o, en su defecto, desde la fecha de compra del vehículo.
+    """
     consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
     resultado = await db.execute(consulta)
     vehiculo = resultado.scalar_one_or_none()
@@ -87,7 +97,7 @@ async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession =
             status_code=status.HTTP_404_NOT_FOUND, detail="Vehiculo no encontrado"
         )
 
-    # Consultar mantenimientos completados ordenados
+    # Traer todos los mantenimientos completados, ordenados del más reciente al más antiguo
     consulta_m = (
         select(MantenimientoDB)
         .where(
@@ -102,9 +112,13 @@ async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession =
 
     km = vehiculo.kilometraje_actual or 0
 
+    # Determinar el nivel de servicio que correspondería
     if num_completados >= 1:
+        # Ya existen mantenimientos previos → se avanza al siguiente nivel
         siguiente_nivel = num_completados + 1
     else:
+        # Primera vez: se estima el nivel según el kilometraje acumulado
+        # (no hay orden histórica que consultar)
         if km < 500:
             siguiente_nivel = 1
         elif km < 3000:
@@ -116,8 +130,11 @@ async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession =
         elif km < 12000:
             siguiente_nivel = 5
         else:
+            # Más allá de 12000 km, cada 3000 km adicionales suma un nivel
             siguiente_nivel = 5 + (((km - 12000) // 3000) + 1)
 
+    # Tabla oficial del manual para los primeros 5 servicios
+    # Cada entrada: (nombre_servicio, km_objetivo, días_hasta_el_siguiente)
     tabla_servicios = {
         1: ("1ra Revisión de Mantenimiento", 500, 60),
         2: ("2da Revisión de Mantenimiento", 3000, 100),
@@ -129,6 +146,7 @@ async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession =
     if siguiente_nivel in tabla_servicios:
         servicio_nombre, km_objetivo, dias_desde_anterior = tabla_servicios[siguiente_nivel]
     else:
+        # Servicios más allá del 5to: se extrapola el patrón del manual
         num_adicional = siguiente_nivel - 5
         servicio_nombre = f"{siguiente_nivel}ta Revisión de Mantenimiento"
         km_objetivo = 12000 + (num_adicional * 3000)
@@ -136,12 +154,15 @@ async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession =
 
     km_faltantes = max(0, km_objetivo - km)
 
-    # Calcular la fecha sugerida usando la última revisión completada o fecha_compra
+    # Calcular la fecha sugerida tomando como referencia el último
+    # servicio completado o, si no existe, la fecha de compra del vehículo
     fecha_sugerida = None
     if completados and (completados[0].fecha_programada or completados[0].fecha_creacion):
         fecha_ref = completados[0].fecha_programada or completados[0].fecha_creacion
         fecha_sugerida = fecha_ref + timedelta(days=dias_desde_anterior)
     elif vehiculo.fecha_compra:
+        # Si no hay servicios previos, se cuenta desde la compra:
+        # el primer servicio vence a los 60 días, los siguientes cada 100 días
         dias_totales = 60 if siguiente_nivel == 1 else 60 + ((siguiente_nivel - 1) * 100)
         fecha_sugerida = vehiculo.fecha_compra + timedelta(days=dias_totales)
 
