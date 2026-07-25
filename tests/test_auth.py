@@ -10,7 +10,19 @@ async def test_registro_exitoso(cliente):
 
     assert respuesta.status_code == 201
     assert respuesta.json()["email"] == "nuevo@example.com"
+    assert respuesta.json()["rol"] == "mecanico"
     assert "hashed_password" not in respuesta.json()
+
+
+@pytest.mark.asyncio
+async def test_registro_impide_escalacion_a_administrador(cliente):
+    respuesta = await cliente.post(
+        "/usuarios/",
+        json={"email": "intento_admin@example.com", "password": "password123", "rol": "administrador"},
+    )
+
+    assert respuesta.status_code == 201
+    assert respuesta.json()["rol"] == "mecanico"
 
 
 @pytest.mark.asyncio

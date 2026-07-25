@@ -31,7 +31,7 @@ class VehiculoResponse(BaseModel):
 class UsuarioCreate(BaseModel):
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=50)
-    rol: str = Field(default="mecanico", pattern="^(mecanico|administrador)$")
+    rol: str | None = Field(default="mecanico")
 
 
 class UsuarioResponse(BaseModel):

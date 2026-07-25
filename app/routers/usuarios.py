@@ -18,7 +18,7 @@ async def registrar_usuario(usuario: UsuarioCreate, db: AsyncSession = Depends(g
     contrasena_encriptada = obtener_hash_password(usuario.password)
 
     nuevo_usuario = UsuarioDB(
-        email=usuario.email, hashed_password=contrasena_encriptada, rol=usuario.rol
+        email=usuario.email, hashed_password=contrasena_encriptada, rol="mecanico"
     )
 
     db.add(nuevo_usuario)

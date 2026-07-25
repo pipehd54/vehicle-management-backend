@@ -78,13 +78,22 @@ async def headers_autorizacion(token_valido):
 
 
 @pytest_asyncio.fixture
-async def admin_prueba(cliente):
-    respuesta = await cliente.post(
-        "/usuarios/",
-        json={"email": "admin@example.com", "password": "password123", "rol": "administrador"},
+async def admin_prueba(base_de_datos):
+    fabrica_sesiones = async_sessionmaker(
+        base_de_datos, class_=AsyncSession, expire_on_commit=False
     )
-    assert respuesta.status_code == 201
-    return respuesta.json()
+    async with fabrica_sesiones() as sesion:
+        from app.models import UsuarioDB
+        from app.security import obtener_hash_password
+        admin = UsuarioDB(
+            email="admin@example.com",
+            hashed_password=obtener_hash_password("password123"),
+            rol="administrador",
+        )
+        sesion.add(admin)
+        await sesion.commit()
+        await sesion.refresh(admin)
+        return {"id": admin.id, "email": admin.email, "rol": admin.rol, "is_active": admin.is_active}
 
 
 @pytest_asyncio.fixture
