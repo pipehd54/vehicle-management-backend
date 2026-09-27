@@ -8,6 +8,17 @@ __pycache__/
 
 .git/
 .gitignore
+.github/
+.agents/
+audit-output/
+tests/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
+requirements-dev.txt
 
 .env
 .env.*
@@ -24,4 +35,3 @@ build/
 *.egg-info/
 
 README.md
-MEJORAS_PORTAFOLIO.md

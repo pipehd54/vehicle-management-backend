@@ -13,16 +13,21 @@ from app.database import get_db
 from app.models import UsuarioDB
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="usuarios/login")
+MAX_BCRYPT_BYTES = 72
 
 
 def obtener_hash_password(password: str) -> str:
     password_bytes = password.encode("utf-8")
+    if len(password_bytes) > MAX_BCRYPT_BYTES:
+        raise ValueError("La contraseña excede el límite de 72 bytes de bcrypt.")
     salt = bcrypt.gensalt()
     return bcrypt.hashpw(password_bytes, salt).decode("utf-8")
 
 
 def verificar_password(plain_password: str, hashed_password: str) -> bool:
     plain_bytes = plain_password.encode("utf-8")
+    if len(plain_bytes) > MAX_BCRYPT_BYTES:
+        return False
     hashed_bytes = hashed_password.encode("utf-8")
     return bcrypt.checkpw(plain_bytes, hashed_bytes)
 

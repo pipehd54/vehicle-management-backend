@@ -14,18 +14,21 @@ Este es un proyecto personal de portafolio desarrollado como estudiante de Ingen
 
 ## Funcionalidades
 
-- Registro e inicio de sesión de usuarios.
-- Autenticación mediante tokens JWT.
+- Registro e inicio de sesión de usuarios (las cuentas requieren activación por un administrador).
+- El registro devuelve una confirmación genérica para no revelar si un correo ya existe.
+- Autenticación mediante tokens JWT (clave mínima de 32 caracteres, algoritmo fijado).
+- Límite de intentos en login y registro por IP; no bloquea cuentas por username.
 - Contraseñas almacenadas con hash seguro de bcrypt.
 - Control de Acceso Basado en Roles (RBAC):
   - **Mecánico:** Crear/Consultar vehículos y crear/actualizar mantenimientos.
   - **Administrador:** Además de las funciones anteriores, tiene permisos exclusivos para eliminar registros.
 - CRUD de vehículos.
 - CRUD de mantenimientos asociados a un vehículo.
+- Las recomendaciones cuentan solo mantenimientos completados marcados como revisión oficial (`es_revision: true`).
 - Paginación en los listados de vehículos y mantenimientos.
 - Health check para comprobar la conexión con la base de datos.
 - Migraciones de base de datos con Alembic.
-- Pruebas automatizadas con SQLite en memoria, sin modificar PostgreSQL.
+- Pruebas locales con SQLite en memoria y validación de integración/migraciones con PostgreSQL en CI.
 - Contenedores para API y PostgreSQL mediante Docker Compose.
 
 ## Tecnologías
@@ -51,12 +54,14 @@ Este es un proyecto personal de portafolio desarrollado como estudiante de Ingen
 │   ├── database.py       # Motor y sesiones asíncronas
 │   ├── depends.py        # Dependencias de seguridad y roles (RBAC)
 │   ├── models.py         # Modelos de SQLAlchemy
+│   ├── rate_limit.py     # Límite de solicitudes por IP
 │   ├── schemas.py        # Modelos de validación Pydantic
 │   └── security.py       # Hash de contraseñas y JWT
 ├── tests/                # Pruebas automatizadas
 ├── Dockerfile
 ├── docker-compose.yml
 ├── requirements.txt
+├── requirements-dev.txt
 └── README.md
 ```
 
@@ -68,9 +73,13 @@ Este es un proyecto personal de portafolio desarrollado como estudiante de Ingen
 
 ## Variables de entorno
 
-Crea un archivo llamado `.env` en la raíz del proyecto. No debe subirse al repositorio.
+Copia `.env.example` como `.env` en la raíz del proyecto. Cambia las claves de ejemplo antes de usarlo y no subas `.env` al repositorio.
 
-Para ejecutar la aplicación localmente con PostgreSQL:
+```powershell
+Copy-Item .env.example .env
+```
+
+Para ejecutar la aplicación localmente con PostgreSQL, cambia el host de `DATABASE_URL` de `db` a `localhost`:
 
 ```env
 DATABASE_URL=postgresql+asyncpg://taller_user:tu_password@localhost:5432/taller_db
@@ -91,6 +100,8 @@ SECRET_KEY=una_clave_larga_y_secreta_de_al_menos_32_caracteres
 ```
 
 `CORS_ORIGINS` admite varios orígenes separados por comas, por ejemplo: `http://localhost:3000,http://localhost:5173,https://vehicle-management-frontend-ruby.vercel.app`.
+Compose pasa este valor al contenedor API. PostgreSQL solo se publica en loopback; usa `POSTGRES_PORT` para cambiar el puerto local.
+El limitador por IP vive en memoria de cada proceso y tiene capacidad máxima. Para varios workers o réplicas, aplica la cuota compartida en un gateway o almacén común.
 
 ## Ejecutar con Docker
 
@@ -127,7 +138,7 @@ python -m venv .venv
 2. Instala las dependencias:
 
 ```powershell
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 3. Crea la base de datos en PostgreSQL y configura el archivo `.env`.
@@ -150,15 +161,17 @@ uvicorn app.main:app --reload
 | --- | --- | --- | --- |
 | `GET` | `/` | Mensaje de bienvenida | Público |
 | `GET` | `/health` | Estado de la API y la base de datos | Público |
-| `POST` | `/usuarios/` | Registra un usuario (mecanico/administrador) | Público |
-| `POST` | `/usuarios/login` | Devuelve un token JWT | Público |
-| `GET` | `/vehiculos/` | Lista vehículos paginados | Público |
-| `GET` | `/vehiculos/{vehiculo_id}` | Consulta un vehículo | Público |
+| `POST` | `/usuarios/` | Registra un usuario como mecánico inactivo (pendiente de activación) | Público (limitado por IP) |
+| `POST` | `/usuarios/login` | Devuelve un token JWT (solo cuentas activas) | Público (limitado por IP) |
+| `GET` | `/usuarios/pendientes` | Lista cuentas pendientes de activación | JWT (Solo Admin) |
+| `PATCH` | `/usuarios/{usuario_id}/activar` | Activa una cuenta registrada | JWT (Solo Admin) |
+| `GET` | `/vehiculos/` | Lista vehículos paginados | JWT |
+| `GET` | `/vehiculos/{vehiculo_id}` | Consulta un vehículo | JWT |
 | `POST` | `/vehiculos/` | Crea un vehículo | JWT |
 | `PUT` | `/vehiculos/{vehiculo_id}` | Actualiza un vehículo | JWT |
 | `DELETE` | `/vehiculos/{vehiculo_id}` | Elimina un vehículo y sus mantenimientos | JWT (Solo Admin) |
-| `GET` | `/mantenimientos/` | Lista mantenimientos paginados y filtrables | Público |
-| `GET` | `/mantenimientos/{mantenimiento_id}` | Consulta un mantenimiento | Público |
+| `GET` | `/mantenimientos/` | Lista mantenimientos paginados y filtrables | JWT |
+| `GET` | `/mantenimientos/{mantenimiento_id}` | Consulta un mantenimiento | JWT |
 | `POST` | `/mantenimientos/` | Crea un mantenimiento | JWT |
 | `PUT` | `/mantenimientos/{mantenimiento_id}` | Actualiza un mantenimiento | JWT |
 | `DELETE` | `/mantenimientos/{mantenimiento_id}` | Elimina un mantenimiento | JWT (Solo Admin) |
@@ -182,8 +195,7 @@ Registrar un usuario:
 ```json
 {
   "email": "mecanico@example.com",
-  "password": "password123",
-  "rol": "mecanico"
+  "password": "password123"
 }
 ```
 
@@ -216,7 +228,7 @@ Authorization: Bearer <access_token>
 
 ## Pruebas
 
-Las pruebas usan SQLite asíncrono en memoria. No se conectan ni modifican tu instancia de PostgreSQL.
+Por defecto, las pruebas locales usan SQLite asíncrono en memoria. En CI se ejecutan contra el servicio PostgreSQL y se aplica también la cadena de migraciones.
 
 ```powershell
 pytest -q

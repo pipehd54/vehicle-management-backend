@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class VehiculoCreate(BaseModel):
@@ -29,9 +29,21 @@ class VehiculoResponse(BaseModel):
 
 
 class UsuarioCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=50)
-    rol: str | None = Field(default="mecanico")
+
+    @field_validator("password")
+    @classmethod
+    def validar_longitud_bcrypt(cls, password: str) -> str:
+        if len(password.encode("utf-8")) > 72:
+            raise ValueError("La contraseña no puede superar 72 bytes en UTF-8.")
+        return password
+
+
+class RegistroRespuesta(BaseModel):
+    mensaje: str
 
 
 class UsuarioResponse(BaseModel):
@@ -49,6 +61,10 @@ class MantenimientoCreate(BaseModel):
     # estado no tiene pattern porque el frontend puede enviar valores
     # como "pendiente", "en_progreso", "completado", etc.
     estado: str = Field(default="pendiente", max_length=30)
+    es_revision: bool = Field(
+        default=False,
+        description="Indica si el mantenimiento cuenta como revisión oficial del vehículo.",
+    )
     # ge=0 evita costos negativos (no tendría sentido en un taller)
     costo_estimado: int | None = Field(default=None, ge=0)
     kilometraje: int | None = Field(default=None, ge=0)
@@ -58,6 +74,7 @@ class MantenimientoCreate(BaseModel):
 class MantenimientoUpdate(BaseModel):
     descripcion: str = Field(..., min_length=5, max_length=500)
     estado: str = Field(..., max_length=30)
+    es_revision: bool | None = None
     costo_estimado: int | None = Field(default=None, ge=0)
     kilometraje: int | None = Field(default=None, ge=0)
     fecha_programada: datetime | None = Field(default=None)
@@ -68,9 +85,11 @@ class MantenimientoResponse(BaseModel):
     vehiculo_id: int
     descripcion: str
     estado: str
+    es_revision: bool
     costo_estimado: int | None
     kilometraje: int | None
     fecha_programada: datetime | None
+    fecha_completado: datetime | None
     fecha_creacion: datetime
 
     model_config = ConfigDict(from_attributes=True)

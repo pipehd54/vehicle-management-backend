@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, false
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -50,9 +50,15 @@ class MantenimientoDB(Base):
     vehiculo: Mapped["VehiculoDB"] = relationship(back_populates="mantenimientos")
     descripcion: Mapped[str] = mapped_column(Text, nullable=False)
     estado: Mapped[str] = mapped_column(String(30), nullable=False, default="pendiente")
+    es_revision: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=false()
+    )
     costo_estimado: Mapped[int | None] = mapped_column(Integer, nullable=True)
     kilometraje: Mapped[int | None] = mapped_column(Integer, nullable=True)
     fecha_programada: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fecha_completado: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     # Se usa default=lambda en lugar de default=datetime.now(...) para que
     # la función se evalúe en el momento de crear el registro (cada vez que
     # se instancia el modelo), no al importar el módulo.

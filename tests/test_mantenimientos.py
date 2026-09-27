@@ -37,7 +37,10 @@ async def test_listar_mantenimientos_filtrados_por_vehiculo(cliente, headers_aut
     vehiculo = await crear_vehiculo(cliente, headers_autorizacion)
     await crear_mantenimiento(cliente, headers_autorizacion, vehiculo["id"])
 
-    respuesta = await cliente.get(f"/mantenimientos/?vehiculo_id={vehiculo['id']}&skip=0&limit=20")
+    respuesta = await cliente.get(
+        f"/mantenimientos/?vehiculo_id={vehiculo['id']}&skip=0&limit=20",
+        headers=headers_autorizacion,
+    )
 
     assert respuesta.status_code == 200
     assert len(respuesta.json()) == 1
@@ -49,7 +52,9 @@ async def test_obtener_mantenimiento_por_id(cliente, headers_autorizacion):
     vehiculo = await crear_vehiculo(cliente, headers_autorizacion)
     creado = await crear_mantenimiento(cliente, headers_autorizacion, vehiculo["id"])
 
-    respuesta = await cliente.get(f"/mantenimientos/{creado.json()['id']}")
+    respuesta = await cliente.get(
+        f"/mantenimientos/{creado.json()['id']}", headers=headers_autorizacion
+    )
 
     assert respuesta.status_code == 200
     assert respuesta.json()["id"] == creado.json()["id"]
@@ -93,4 +98,8 @@ async def test_eliminar_mantenimiento_como_admin(cliente, headers_autorizacion, 
     )
 
     assert respuesta.status_code == 200
-    assert (await cliente.get(f"/mantenimientos/{creado.json()['id']}")).status_code == 404
+    assert (
+        await cliente.get(
+            f"/mantenimientos/{creado.json()['id']}", headers=headers_admin
+        )
+    ).status_code == 404

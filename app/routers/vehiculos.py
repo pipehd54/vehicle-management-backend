@@ -1,6 +1,6 @@
 from datetime import timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,16 +53,21 @@ async def obtener_vehiculos(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
-    """Lista todos los vehículos."""
-    consulta = select(VehiculoDB).offset(skip).limit(limit)
+    """Lista todos los vehículos. Requiere autenticación."""
+    consulta = select(VehiculoDB).order_by(VehiculoDB.id).offset(skip).limit(limit)
     resultado = await db.execute(consulta)
     return resultado.scalars().all()
 
 
 @router.get("/{vehiculo_id}", response_model=VehiculoResponse)
-async def obtener_vehiculo(vehiculo_id: int, db: AsyncSession = Depends(get_db)):
-    """Obtiene un vehículo por su identificador."""
+async def obtener_vehiculo(
+    vehiculo_id: int,
+    db: AsyncSession = Depends(get_db),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
+):
+    """Obtiene un vehículo por su identificador. Requiere autenticación."""
     consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
     resultado = await db.execute(consulta)
     vehiculo = resultado.scalar_one_or_none()
@@ -76,7 +81,11 @@ async def obtener_vehiculo(vehiculo_id: int, db: AsyncSession = Depends(get_db))
 
 
 @router.get("/{vehiculo_id}/proximo-mantenimiento", response_model=ProximoMantenimientoResponse)
-async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession = Depends(get_db)):
+async def proximo_mantenimiento_recomendado(
+    vehiculo_id: int,
+    db: AsyncSession = Depends(get_db),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
+):
     """
     Calcula el próximo mantenimiento sugerido basado en el manual oficial del taller.
 
@@ -97,18 +106,27 @@ async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession =
             status_code=status.HTTP_404_NOT_FOUND, detail="Vehiculo no encontrado"
         )
 
-    # Traer todos los mantenimientos completados, ordenados del más reciente al más antiguo
-    consulta_m = (
-        select(MantenimientoDB)
+    # Contar en SQL y recuperar una sola fecha real de finalización.
+    consulta_conteo = select(func.count(MantenimientoDB.id)).where(
+        MantenimientoDB.vehiculo_id == vehiculo_id,
+        MantenimientoDB.estado == "completado",
+        MantenimientoDB.es_revision.is_(True),
+    )
+    num_completados = await db.scalar(consulta_conteo) or 0
+    consulta_ultimo = (
+        select(MantenimientoDB.fecha_completado, MantenimientoDB.fecha_creacion)
         .where(
             MantenimientoDB.vehiculo_id == vehiculo_id,
             MantenimientoDB.estado == "completado",
+            MantenimientoDB.es_revision.is_(True),
         )
-        .order_by(MantenimientoDB.fecha_programada.desc(), MantenimientoDB.id.desc())
+        .order_by(
+            MantenimientoDB.fecha_completado.desc().nulls_last(),
+            MantenimientoDB.id.desc(),
+        )
+        .limit(1)
     )
-    res_m = await db.execute(consulta_m)
-    completados = res_m.scalars().all()
-    num_completados = len(completados)
+    ultimo_completado = (await db.execute(consulta_ultimo)).first()
 
     km = vehiculo.kilometraje_actual or 0
 
@@ -157,8 +175,9 @@ async def proximo_mantenimiento_recomendado(vehiculo_id: int, db: AsyncSession =
     # Calcular la fecha sugerida tomando como referencia el último
     # servicio completado o, si no existe, la fecha de compra del vehículo
     fecha_sugerida = None
-    if completados and (completados[0].fecha_programada or completados[0].fecha_creacion):
-        fecha_ref = completados[0].fecha_programada or completados[0].fecha_creacion
+    if ultimo_completado:
+        fecha_completado, fecha_creacion = ultimo_completado
+        fecha_ref = fecha_completado or fecha_creacion
         fecha_sugerida = fecha_ref + timedelta(days=dias_desde_anterior)
     elif vehiculo.fecha_compra:
         # Si no hay servicios previos, se cuenta desde la compra:

@@ -45,7 +45,9 @@ class Settings(BaseSettings):
     # SecretStr es un tipo especial de Pydantic: nunca imprime el valor
     # real en logs ni en representaciones de texto. Para leer el valor
     # hay que llamar explícitamente a .get_secret_value().
-    SECRET_KEY: SecretStr
+    # min_length=32 hace cumplir en código lo que exige el README:
+    # una clave HMAC corta permitiría forjar JWT arbitrarios.
+    SECRET_KEY: SecretStr = Field(min_length=32)
 
     # Literal restringe el algoritmo a una lista blanca explícita.
     # Evita que alguien configure ALGORITHM=none (ataque histórico en JWT).

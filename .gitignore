@@ -5,6 +5,12 @@ env/
 
 # ─── Archivos compilados de Python ───
 __pycache__/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+coverage.xml
 *.py[cod]
 *$py.class
 *.pyo
@@ -12,6 +18,7 @@ __pycache__/
 # ─── Variables de entorno (SECRETOS) ───
 .env
 .env.*
+!.env.example
 
 # ─── IDEs y editores ───
 .vscode/
@@ -33,6 +40,10 @@ build/
 
 # ─── Logs ───
 *.log
+
+# Herramientas locales y resultados generados
+.agents/
+audit-output/
 
 # ─── Base de datos local ───
 *.db

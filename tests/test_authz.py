@@ -6,6 +6,9 @@ import pytest
     ("metodo", "url", "payload"),
     [
         ("post", "/vehiculos/", {"placa": "SIN-123", "marca": "Kia", "modelo": "Rio"}),
+        ("get", "/vehiculos/", None),
+        ("get", "/vehiculos/1", None),
+        ("get", "/vehiculos/1/proximo-mantenimiento", None),
         ("put", "/vehiculos/1", {"placa": "SIN-123", "marca": "Kia", "modelo": "Rio"}),
         ("delete", "/vehiculos/1", None),
         (
@@ -19,6 +22,8 @@ import pytest
             {"descripcion": "Cambio de aceite", "estado": "pendiente"},
         ),
         ("delete", "/mantenimientos/1", None),
+        ("get", "/mantenimientos/", None),
+        ("get", "/mantenimientos/1", None),
     ],
 )
 async def test_endpoints_protegidos_requieren_token(cliente, metodo, url, payload):

@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,9 +50,13 @@ async def crear_mantenimiento(
         vehiculo_id=mantenimiento.vehiculo_id,
         descripcion=mantenimiento.descripcion,
         estado=mantenimiento.estado,
+        es_revision=mantenimiento.es_revision,
         costo_estimado=mantenimiento.costo_estimado,
         kilometraje=mantenimiento.kilometraje,
         fecha_programada=mantenimiento.fecha_programada,
+        fecha_completado=(
+            datetime.now(timezone.utc) if mantenimiento.estado == "completado" else None
+        ),
     )
 
     db.add(nuevo_mantenimiento)
@@ -66,13 +72,16 @@ async def listar_mantenimientos(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
     consulta = select(MantenimientoDB)
 
     if vehiculo_id is not None:
         consulta = consulta.where(MantenimientoDB.vehiculo_id == vehiculo_id)
 
-    resultado = await db.execute(consulta.offset(skip).limit(limit))
+    resultado = await db.execute(
+        consulta.order_by(MantenimientoDB.id).offset(skip).limit(limit)
+    )
     return resultado.scalars().all()
 
 
@@ -80,6 +89,7 @@ async def listar_mantenimientos(
 async def obtener_mantenimiento(
     mantenimiento_id: int,
     db: AsyncSession = Depends(get_db),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
     consulta = select(MantenimientoDB).where(MantenimientoDB.id == mantenimiento_id)
     resultado = await db.execute(consulta)
@@ -111,11 +121,19 @@ async def actualizar_mantenimiento(
             detail="Mantenimiento no encontrado.",
         )
 
+    estado_anterior = mantenimiento.estado
     mantenimiento.descripcion = mantenimiento_actualizado.descripcion
     mantenimiento.estado = mantenimiento_actualizado.estado
+    if mantenimiento_actualizado.es_revision is not None:
+        mantenimiento.es_revision = mantenimiento_actualizado.es_revision
     mantenimiento.costo_estimado = mantenimiento_actualizado.costo_estimado
     mantenimiento.kilometraje = mantenimiento_actualizado.kilometraje
     mantenimiento.fecha_programada = mantenimiento_actualizado.fecha_programada
+    if mantenimiento.estado == "completado":
+        if estado_anterior != "completado" or mantenimiento.fecha_completado is None:
+            mantenimiento.fecha_completado = datetime.now(timezone.utc)
+    else:
+        mantenimiento.fecha_completado = None
 
     await db.commit()
     await db.refresh(mantenimiento)
