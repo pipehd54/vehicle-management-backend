@@ -18,7 +18,7 @@ tests/
 .coverage
 .coverage.*
 coverage.xml
-requirements-dev.txt
+cobertura.xml
 
 .env
 .env.*

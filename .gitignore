@@ -1,50 +1,53 @@
-# ─── Entorno virtual ───
+# Entornos virtuales
 .venv/
 venv/
 env/
 
-# ─── Archivos compilados de Python ───
+# Archivos compilados de Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+
+# Herramientas de pruebas y análisis
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .coverage
 .coverage.*
 coverage.xml
-*.py[cod]
-*$py.class
-*.pyo
+cobertura.xml
+cov.json
+htmlcov/
 
-# ─── Variables de entorno (SECRETOS) ───
+# Variables de entorno (secretos)
 .env
 .env.*
 !.env.example
 
-# ─── IDEs y editores ───
+# Entornos de desarrollo
+.agents/
+audit-output/
+
+# Sistema operativo y editores
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-
-# ─── Sistema operativo ───
-Thumbs.db
-Desktop.ini
 .DS_Store
+Thumbs.db
+desktop.ini
 
-# ─── Distribución / packaging ───
+# Empaquetado
 dist/
 build/
 *.egg-info/
 *.egg
 
-# ─── Logs ───
+# Logs
 *.log
 
-# Herramientas locales y resultados generados
-.agents/
-audit-output/
-
-# ─── Base de datos local ───
+# Bases de datos locales
 *.db
 *.sqlite3
