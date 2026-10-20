@@ -1,17 +1,32 @@
+"""Endpoints de usuarios: registro, login y activación de cuentas."""
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.depends import requiere_admin
-from app.models import UsuarioDB
-from app.rate_limit import registrar_intento_login, registrar_intento_registro
-from app.schemas import RegistroRespuesta, UsuarioCreate, UsuarioResponse
-from app.security import crear_token_acceso, obtener_hash_password, verificar_password
+from app.base_datos import get_db
+from app.dependencias import requiere_admin
+from app.enums import RolUsuario
+from app.esquemas import RegistroRespuesta, UsuarioCreate, UsuarioResponse
+from app.limitador import (
+    comprobar_limite_login,
+    registrar_fallo_login,
+    registrar_intento_registro,
+)
+from app.modelos import UsuarioDB
+from app.repositorio import obtener_usuario_o_404
+from app.seguridad import (
+    HASH_SENUELO,
+    crear_token_acceso,
+    obtener_hash_password,
+    verificar_password,
+)
 
 router = APIRouter()
+
+# Respuesta única del registro: no revela si el correo ya estaba en uso.
 MENSAJE_REGISTRO = "Solicitud recibida. Si los datos son válidos, será procesada."
 
 
@@ -21,17 +36,19 @@ async def registrar_usuario(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
+    """Registra una solicitud de cuenta.
+
+    La cuenta nace inactiva y con rol de mecánico: un administrador debe
+    activarla desde `PATCH /usuarios/{id}/activar`. El rol nunca se toma del
+    cuerpo de la petición, de modo que no se puede escalar privilegios.
+    """
     # Frena la creación masiva de cuentas desde una misma IP.
     registrar_intento_registro(request)
 
-    contrasena_encriptada = obtener_hash_password(usuario.password)
-
-    # La respuesta uniforme evita revelar si el correo ya existía.
-    # Las cuentas nuevas nacen inactivas y requieren activación administrativa.
     nuevo_usuario = UsuarioDB(
         email=usuario.email,
-        hashed_password=contrasena_encriptada,
-        rol="mecanico",
+        hashed_password=obtener_hash_password(usuario.password),
+        rol=RolUsuario.MECANICO,
         is_active=False,
     )
 
@@ -53,33 +70,41 @@ async def login(
     credenciales: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):
-    # Se cuenta antes de consultar: los intentos contra cuentas
-    # inexistentes también consumen cuota del atacante.
-    registrar_intento_login(request)
+    """Autentica a un usuario activo y devuelve un token JWT.
 
-    consulta = select(UsuarioDB).where(UsuarioDB.email == credenciales.username)
-    resultado = await db.execute(consulta)
+    Solo se cuentan los intentos fallidos contra el limitador, de modo que un
+    usuario legítimo no agota la cuota por escribir mal su contraseña.
+    """
+    correo = credenciales.username.strip().lower()
+
+    # Se comprueba la cuota antes de tocar la base de datos.
+    comprobar_limite_login(request, correo)
+
+    resultado = await db.execute(select(UsuarioDB).where(UsuarioDB.email == correo))
     usuario_db = resultado.scalar_one_or_none()
 
-    # Verificamos tres condiciones en orden:
+    # Se verifican tres condiciones en orden:
     # 1. El usuario existe en la DB.
     # 2. Su cuenta está activa (is_active=True, tras activación admin).
     # 3. La contraseña enviada coincide con el hash almacenado.
-    # Si cualquiera falla, retornamos el mismo error genérico (401)
-    # para no revelar si el email existe o no en el sistema.
-    if (
-        not usuario_db
-        or not usuario_db.is_active
-        or not verificar_password(credenciales.password, usuario_db.hashed_password)
-    ):
+    # Si cualquiera falla, se devuelve el mismo error genérico (401) para no
+    # revelar si el email existe o no en el sistema. Cuando el correo no
+    # existe se compara contra un hash señuelo, de modo que el tiempo de
+    # respuesta tampoco permita deducirlo.
+    hash_a_comprobar = usuario_db.hashed_password if usuario_db else HASH_SENUELO
+    contraseña_correcta = verificar_password(credenciales.password, hash_a_comprobar)
+
+    if usuario_db is None or not usuario_db.is_active or not contraseña_correcta:
+        registrar_fallo_login(request, correo)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Credenciales incorrectas. Acceso denegado al taller.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    token = crear_token_acceso(data={"sub": usuario_db.email, "rol": usuario_db.rol})
-
+    token = crear_token_acceso(
+        data={"sub": usuario_db.email, "rol": usuario_db.rol.value}
+    )
     return {"access_token": token, "token_type": "bearer"}
 
 
@@ -90,12 +115,10 @@ async def listar_cuentas_pendientes(
 ):
     """Lista las cuentas registradas que aún no fueron activadas. Solo admin."""
     consulta = (
-        select(UsuarioDB)
-        .where(UsuarioDB.is_active == False)  # noqa: E712
-        .order_by(UsuarioDB.id)
+        select(UsuarioDB).where(UsuarioDB.is_active.is_(False)).order_by(UsuarioDB.id)
     )
     resultado = await db.execute(consulta)
-    return resultado.scalars().all()
+    return list(resultado.scalars().all())
 
 
 @router.patch("/{usuario_id}/activar", response_model=UsuarioResponse)
@@ -105,16 +128,7 @@ async def activar_usuario(
     admin_actual: UsuarioDB = Depends(requiere_admin),
 ):
     """Activa una cuenta registrada para que pueda iniciar sesión. Solo admin."""
-    consulta = select(UsuarioDB).where(UsuarioDB.id == usuario_id)
-    resultado = await db.execute(consulta)
-    usuario = resultado.scalar_one_or_none()
-
-    if usuario is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado.",
-        )
-
+    usuario = await obtener_usuario_o_404(usuario_id, db)
     usuario.is_active = True
     await db.commit()
     await db.refresh(usuario)

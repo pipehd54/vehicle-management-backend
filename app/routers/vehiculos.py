@@ -1,14 +1,26 @@
-from datetime import timedelta
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+"""Endpoints de vehículos del taller."""
+
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.depends import requiere_admin
-from app.models import MantenimientoDB, UsuarioDB, VehiculoDB
-from app.schemas import ProximoMantenimientoResponse, VehiculoCreate, VehiculoResponse
-from app.security import obtener_usuario_actual
+from app.base_datos import get_db
+from app.dependencias import requiere_admin
+from app.errores import conflicto_integridad
+from app.esquemas import (
+    ProximoMantenimientoResponse,
+    VehiculoCreate,
+    VehiculoResponse,
+)
+from app.modelos import UsuarioDB, VehiculoDB
+from app.repositorio import (
+    contar_revisiones_completadas,
+    obtener_vehiculo_o_404,
+    ultima_revision_completada,
+)
+from app.seguridad import obtener_usuario_actual
+from app.servicios.programa_mantenimiento import calcular_recomendacion
 
 router = APIRouter()
 
@@ -38,12 +50,9 @@ async def registrar_vehiculo(
     try:
         await db.commit()
         await db.refresh(nuevo_vehiculo)
-    except IntegrityError:
+    except IntegrityError as error:
         await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La placa ya existe en la base de datos",
-        )
+        raise conflicto_integridad("La placa ya existe en la base de datos") from error
 
     return nuevo_vehiculo
 
@@ -58,7 +67,7 @@ async def obtener_vehiculos(
     """Lista todos los vehículos. Requiere autenticación."""
     consulta = select(VehiculoDB).order_by(VehiculoDB.id).offset(skip).limit(limit)
     resultado = await db.execute(consulta)
-    return resultado.scalars().all()
+    return list(resultado.scalars().all())
 
 
 @router.get("/{vehiculo_id}", response_model=VehiculoResponse)
@@ -68,133 +77,41 @@ async def obtener_vehiculo(
     usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
     """Obtiene un vehículo por su identificador. Requiere autenticación."""
-    consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
-    resultado = await db.execute(consulta)
-    vehiculo = resultado.scalar_one_or_none()
-
-    if not vehiculo:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Vehiculo no encontrado"
-        )
-
-    return vehiculo
+    return await obtener_vehiculo_o_404(vehiculo_id, db)
 
 
-@router.get("/{vehiculo_id}/proximo-mantenimiento", response_model=ProximoMantenimientoResponse)
+@router.get(
+    "/{vehiculo_id}/proximo-mantenimiento", response_model=ProximoMantenimientoResponse
+)
 async def proximo_mantenimiento_recomendado(
     vehiculo_id: int,
     db: AsyncSession = Depends(get_db),
     usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
+    """Calcula el próximo mantenimiento sugerido según el manual del taller.
+
+    El cálculo vive en `app.servicios.programa_mantenimiento`; este endpoint
+    solo recopila los datos del vehículo y su historial.
     """
-    Calcula el próximo mantenimiento sugerido basado en el manual oficial del taller.
+    vehiculo = await obtener_vehiculo_o_404(vehiculo_id, db)
 
-    La lógica sigue este orden:
-      1. Si ya hay mantenimientos completados, el siguiente nivel es el que sigue.
-      2. Si es la primera vez, se deduce el nivel según el kilometraje actual.
-      3. Se consulta una tabla fija para los primeros 5 servicios; más allá,
-         se extrapola cada 3000 km.
-      4. La fecha sugerida se calcula a partir del último servicio completado
-         o, en su defecto, desde la fecha de compra del vehículo.
-    """
-    consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
-    resultado = await db.execute(consulta)
-    vehiculo = resultado.scalar_one_or_none()
+    revisiones_completadas = await contar_revisiones_completadas(vehiculo_id, db)
+    fecha_ultimo_servicio = await ultima_revision_completada(vehiculo_id, db)
 
-    if not vehiculo:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Vehiculo no encontrado"
-        )
-
-    # Contar en SQL y recuperar una sola fecha real de finalización.
-    consulta_conteo = select(func.count(MantenimientoDB.id)).where(
-        MantenimientoDB.vehiculo_id == vehiculo_id,
-        MantenimientoDB.estado == "completado",
-        MantenimientoDB.es_revision.is_(True),
+    recomendacion = calcular_recomendacion(
+        kilometraje=vehiculo.kilometraje_actual or 0,
+        revisiones_completadas=revisiones_completadas,
+        fecha_ultimo_servicio=fecha_ultimo_servicio,
+        fecha_compra=vehiculo.fecha_compra,
     )
-    num_completados = await db.scalar(consulta_conteo) or 0
-    consulta_ultimo = (
-        select(MantenimientoDB.fecha_completado, MantenimientoDB.fecha_creacion)
-        .where(
-            MantenimientoDB.vehiculo_id == vehiculo_id,
-            MantenimientoDB.estado == "completado",
-            MantenimientoDB.es_revision.is_(True),
-        )
-        .order_by(
-            MantenimientoDB.fecha_completado.desc().nulls_last(),
-            MantenimientoDB.id.desc(),
-        )
-        .limit(1)
-    )
-    ultimo_completado = (await db.execute(consulta_ultimo)).first()
-
-    km = vehiculo.kilometraje_actual or 0
-
-    # Determinar el nivel de servicio que correspondería
-    if num_completados >= 1:
-        # Ya existen mantenimientos previos → se avanza al siguiente nivel
-        siguiente_nivel = num_completados + 1
-    else:
-        # Primera vez: se estima el nivel según el kilometraje acumulado
-        # (no hay orden histórica que consultar)
-        if km < 500:
-            siguiente_nivel = 1
-        elif km < 3000:
-            siguiente_nivel = 2
-        elif km < 6000:
-            siguiente_nivel = 3
-        elif km < 9000:
-            siguiente_nivel = 4
-        elif km < 12000:
-            siguiente_nivel = 5
-        else:
-            # Más allá de 12000 km, cada 3000 km adicionales suma un nivel
-            siguiente_nivel = 5 + (((km - 12000) // 3000) + 1)
-
-    # Tabla oficial del manual para los primeros 5 servicios
-    # Cada entrada: (nombre_servicio, km_objetivo, días_hasta_el_siguiente)
-    tabla_servicios = {
-        1: ("1ra Revisión de Mantenimiento", 500, 60),
-        2: ("2da Revisión de Mantenimiento", 3000, 100),
-        3: ("3ra Revisión de Mantenimiento", 6000, 100),
-        4: ("4ta Revisión de Mantenimiento", 9000, 100),
-        5: ("5ta Revisión de Mantenimiento", 12000, 100),
-    }
-
-    if siguiente_nivel in tabla_servicios:
-        servicio_nombre, km_objetivo, dias_desde_anterior = tabla_servicios[siguiente_nivel]
-    else:
-        # Servicios más allá del 5to: se extrapola el patrón del manual
-        num_adicional = siguiente_nivel - 5
-        servicio_nombre = f"{siguiente_nivel}ta Revisión de Mantenimiento"
-        km_objetivo = 12000 + (num_adicional * 3000)
-        dias_desde_anterior = 100
-
-    km_faltantes = max(0, km_objetivo - km)
-
-    # Calcular la fecha sugerida tomando como referencia el último
-    # servicio completado o, si no existe, la fecha de compra del vehículo
-    fecha_sugerida = None
-    if ultimo_completado:
-        fecha_completado, fecha_creacion = ultimo_completado
-        fecha_ref = fecha_completado or fecha_creacion
-        fecha_sugerida = fecha_ref + timedelta(days=dias_desde_anterior)
-    elif vehiculo.fecha_compra:
-        # Si no hay servicios previos, se cuenta desde la compra:
-        # el primer servicio vence a los 60 días, los siguientes cada 100 días
-        dias_totales = 60 if siguiente_nivel == 1 else 60 + ((siguiente_nivel - 1) * 100)
-        fecha_sugerida = vehiculo.fecha_compra + timedelta(days=dias_totales)
-
-    meses_equiv = 2 if siguiente_nivel == 1 else 2 + (siguiente_nivel - 1) * 3
-    descripcion = f"{servicio_nombre} (Objetivo: {km_objetivo:,} km. Faltan {km_faltantes:,} km. Plazo: {dias_desde_anterior} días desde el servicio anterior)."
 
     return ProximoMantenimientoResponse(
-        servicio_numero=servicio_nombre,
-        kilometraje_objetivo=km_objetivo,
-        kilometraje_faltante=km_faltantes,
-        meses_desde_compra=meses_equiv,
-        fecha_sugerida=fecha_sugerida,
-        descripcion_sugerida=descripcion,
+        servicio_numero=recomendacion.nombre,
+        kilometraje_objetivo=recomendacion.km_objetivo,
+        kilometraje_faltante=recomendacion.km_faltantes,
+        meses_desde_compra=recomendacion.meses_desde_compra,
+        fecha_sugerida=recomendacion.fecha_sugerida,
+        descripcion_sugerida=recomendacion.descripcion,
     )
 
 
@@ -205,15 +122,8 @@ async def actualizar_vehiculo(
     db: AsyncSession = Depends(get_db),
     usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
-    """Actualiza un vehículo existente."""
-    consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
-    resultado = await db.execute(consulta)
-    vehiculo_db = resultado.scalar_one_or_none()
-
-    if not vehiculo_db:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Vehiculo no encontrado"
-        )
+    """Reemplaza los datos de un vehículo existente."""
+    vehiculo_db = await obtener_vehiculo_o_404(vehiculo_id, db)
 
     vehiculo_db.placa = vehiculo_actualizado.placa
     vehiculo_db.marca = vehiculo_actualizado.marca
@@ -225,12 +135,11 @@ async def actualizar_vehiculo(
     try:
         await db.commit()
         await db.refresh(vehiculo_db)
-    except IntegrityError:
+    except IntegrityError as error:
         await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La nueva placa ya esta en uso por otro vehiculo.",
-        )
+        raise conflicto_integridad(
+            "La nueva placa ya esta en uso por otro vehiculo."
+        ) from error
 
     return vehiculo_db
 
@@ -241,19 +150,14 @@ async def eliminar_vehiculo(
     db: AsyncSession = Depends(get_db),
     admin_actual: UsuarioDB = Depends(requiere_admin),
 ):
-    """Elimina un vehículo. Requiere rol de administrador."""
-    consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
-    resultado = await db.execute(consulta)
-    vehiculo_db = resultado.scalar_one_or_none()
-
-    if not vehiculo_db:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Vehiculo no encontrado."
-        )
+    """Elimina un vehículo y sus mantenimientos. Requiere rol de administrador."""
+    vehiculo_db = await obtener_vehiculo_o_404(vehiculo_id, db)
 
     await db.delete(vehiculo_db)
     await db.commit()
 
     return {
-        "mensaje": f"El vehiculo con ID {vehiculo_id} fue eliminado correctamente del taller."
+        "mensaje": (
+            f"El vehiculo con ID {vehiculo_id} fue eliminado correctamente del taller."
+        )
     }

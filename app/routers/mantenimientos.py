@@ -1,37 +1,35 @@
-from datetime import datetime, timezone
+"""Endpoints de mantenimientos asociados a los vehículos."""
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_db
-from app.depends import requiere_admin
-from app.models import MantenimientoDB, UsuarioDB, VehiculoDB
-from app.schemas import (
+from app.base_datos import get_db
+from app.dependencias import requiere_admin
+from app.enums import EstadoMantenimiento
+from app.esquemas import (
     MantenimientoCreate,
     MantenimientoResponse,
     MantenimientoUpdate,
 )
-from app.security import obtener_usuario_actual
+from app.modelos import MantenimientoDB, UsuarioDB
+from app.repositorio import (
+    actualizar_kilometraje_vehiculo,
+    obtener_mantenimiento_o_404,
+    obtener_vehiculo_o_404,
+)
+from app.seguridad import obtener_usuario_actual
 
 router = APIRouter()
 
 
-# Helper reutilizable: verifica que el vehículo exista antes de crear
-# un mantenimiento asociado. Evita duplicar la lógica de "404 si no existe"
-# en cada endpoint que recibe un vehiculo_id.
-async def obtener_vehiculo_o_404(vehiculo_id: int, db: AsyncSession) -> VehiculoDB:
-    consulta = select(VehiculoDB).where(VehiculoDB.id == vehiculo_id)
-    resultado = await db.execute(consulta)
-    vehiculo = resultado.scalar_one_or_none()
-
-    if not vehiculo:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vehiculo no encontrado.",
-        )
-
-    return vehiculo
+def _fecha_de_cierre(estado: EstadoMantenimiento) -> datetime | None:
+    """Fecha de cierre de un mantenimiento recién creado."""
+    if estado == EstadoMantenimiento.COMPLETADO:
+        return datetime.now(UTC)
+    return None
 
 
 @router.post(
@@ -44,22 +42,24 @@ async def crear_mantenimiento(
     db: AsyncSession = Depends(get_db),
     usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
-    await obtener_vehiculo_o_404(mantenimiento.vehiculo_id, db)
+    """Registra un mantenimiento para un vehículo existente."""
+    vehiculo = await obtener_vehiculo_o_404(mantenimiento.vehiculo_id, db)
 
     nuevo_mantenimiento = MantenimientoDB(
-        vehiculo_id=mantenimiento.vehiculo_id,
+        vehiculo_id=vehiculo.id,
         descripcion=mantenimiento.descripcion,
         estado=mantenimiento.estado,
         es_revision=mantenimiento.es_revision,
         costo_estimado=mantenimiento.costo_estimado,
         kilometraje=mantenimiento.kilometraje,
         fecha_programada=mantenimiento.fecha_programada,
-        fecha_completado=(
-            datetime.now(timezone.utc) if mantenimiento.estado == "completado" else None
-        ),
+        fecha_completado=_fecha_de_cierre(mantenimiento.estado),
     )
 
     db.add(nuevo_mantenimiento)
+    if nuevo_mantenimiento.estado == EstadoMantenimiento.COMPLETADO:
+        actualizar_kilometraje_vehiculo(vehiculo, nuevo_mantenimiento.kilometraje)
+
     await db.commit()
     await db.refresh(nuevo_mantenimiento)
 
@@ -68,12 +68,13 @@ async def crear_mantenimiento(
 
 @router.get("/", response_model=list[MantenimientoResponse])
 async def listar_mantenimientos(
-    vehiculo_id: int | None = Query(default=None),
+    vehiculo_id: int | None = Query(default=None, ge=1),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
     usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
+    """Lista los mantenimientos, opcionalmente filtrados por vehículo."""
     consulta = select(MantenimientoDB)
 
     if vehiculo_id is not None:
@@ -82,7 +83,7 @@ async def listar_mantenimientos(
     resultado = await db.execute(
         consulta.order_by(MantenimientoDB.id).offset(skip).limit(limit)
     )
-    return resultado.scalars().all()
+    return list(resultado.scalars().all())
 
 
 @router.get("/{mantenimiento_id}", response_model=MantenimientoResponse)
@@ -91,17 +92,8 @@ async def obtener_mantenimiento(
     db: AsyncSession = Depends(get_db),
     usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
-    consulta = select(MantenimientoDB).where(MantenimientoDB.id == mantenimiento_id)
-    resultado = await db.execute(consulta)
-    mantenimiento = resultado.scalar_one_or_none()
-
-    if not mantenimiento:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Mantenimiento no encontrado.",
-        )
-
-    return mantenimiento
+    """Obtiene un mantenimiento por su identificador."""
+    return await obtener_mantenimiento_o_404(mantenimiento_id, db)
 
 
 @router.put("/{mantenimiento_id}", response_model=MantenimientoResponse)
@@ -111,15 +103,13 @@ async def actualizar_mantenimiento(
     db: AsyncSession = Depends(get_db),
     usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
-    consulta = select(MantenimientoDB).where(MantenimientoDB.id == mantenimiento_id)
-    resultado = await db.execute(consulta)
-    mantenimiento = resultado.scalar_one_or_none()
+    """Actualiza un mantenimiento existente.
 
-    if not mantenimiento:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Mantenimiento no encontrado.",
-        )
+    La fecha de cierre se registra al pasar a "completado" y **se conserva**
+    cuando el estado cambia después: es un dato histórico del servicio
+    realizado y no debe borrarse al reordenar la orden de trabajo.
+    """
+    mantenimiento = await obtener_mantenimiento_o_404(mantenimiento_id, db)
 
     estado_anterior = mantenimiento.estado
     mantenimiento.descripcion = mantenimiento_actualizado.descripcion
@@ -129,11 +119,16 @@ async def actualizar_mantenimiento(
     mantenimiento.costo_estimado = mantenimiento_actualizado.costo_estimado
     mantenimiento.kilometraje = mantenimiento_actualizado.kilometraje
     mantenimiento.fecha_programada = mantenimiento_actualizado.fecha_programada
-    if mantenimiento.estado == "completado":
-        if estado_anterior != "completado" or mantenimiento.fecha_completado is None:
-            mantenimiento.fecha_completado = datetime.now(timezone.utc)
-    else:
-        mantenimiento.fecha_completado = None
+
+    if mantenimiento.estado == EstadoMantenimiento.COMPLETADO:
+        # La fecha se sella al completar el servicio y se conserva después.
+        if (
+            estado_anterior != EstadoMantenimiento.COMPLETADO
+            or mantenimiento.fecha_completado is None
+        ):
+            mantenimiento.fecha_completado = datetime.now(UTC)
+        vehiculo = await obtener_vehiculo_o_404(mantenimiento.vehiculo_id, db)
+        actualizar_kilometraje_vehiculo(vehiculo, mantenimiento.kilometraje)
 
     await db.commit()
     await db.refresh(mantenimiento)
@@ -147,15 +142,8 @@ async def eliminar_mantenimiento(
     db: AsyncSession = Depends(get_db),
     admin_actual: UsuarioDB = Depends(requiere_admin),
 ):
-    consulta = select(MantenimientoDB).where(MantenimientoDB.id == mantenimiento_id)
-    resultado = await db.execute(consulta)
-    mantenimiento = resultado.scalar_one_or_none()
-
-    if not mantenimiento:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Mantenimiento no encontrado.",
-        )
+    """Elimina un mantenimiento. Requiere rol de administrador."""
+    mantenimiento = await obtener_mantenimiento_o_404(mantenimiento_id, db)
 
     await db.delete(mantenimiento)
     await db.commit()

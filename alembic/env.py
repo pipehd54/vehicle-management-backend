@@ -10,14 +10,16 @@ from alembic import context
 # Importar todos los modelos para que Alembic los detecte en autogenerate.
 # El 'noqa: F401' suprime el aviso de "importación no usada" del linter,
 # ya que el efecto de este import es el registro en Base.metadata, no el uso directo.
-from app import models  # noqa: F401
-from app.config import settings
-from app.database import Base
+from app import modelos  # noqa: F401
+from app.base_datos import Base
+from app.configuracion import settings
 
 # Alembic toma la URL desde la configuración centralizada de la aplicación.
 # Así se usa siempre la misma fuente de verdad que la API.
+# El '%' se duplica porque ConfigParser lo interpreta como inicio de un
+# comodín: sin esto, una contraseña con '%' rompe las migraciones.
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 target_metadata = Base.metadata
 
@@ -67,11 +69,11 @@ def do_run_migrations(connection: Connection) -> None:
 
 
 async def run_async_migrations() -> None:
-    """In this scenario we need to create an Engine
-    and associate a connection with the context.
+    """Crea un motor asíncrono y ejecuta las migraciones con él.
 
+    Es el camino que se usa en modo online: se abre una conexión con el
+    motor configurado y se ejecuta `run_sync` sobre ella.
     """
-
     connectable = async_engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -86,7 +88,6 @@ async def run_async_migrations() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-
     asyncio.run(run_async_migrations())
 
 

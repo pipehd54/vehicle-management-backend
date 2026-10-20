@@ -1,79 +1,109 @@
+"""Modelos de validación de entrada y salida (Pydantic v2)."""
+
 from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+from app.enums import EstadoMantenimiento, RolUsuario, TipoVehiculo
 
 
 class VehiculoCreate(BaseModel):
-    """Schema para crear o actualizar un vehículo (datos de entrada)."""
-    placa: str = Field(..., min_length=3, max_length=20, description="Placa del vehículo")
+    """Datos de entrada para crear o reemplazar un vehículo."""
+
+    placa: str = Field(
+        ..., min_length=3, max_length=20, description="Placa del vehículo"
+    )
     marca: str = Field(..., min_length=2, max_length=50)
     modelo: str = Field(..., min_length=1, max_length=50)
-    # pattern restringe el tipo a valores fijos del taller — evita
-    # clasificaciones inventadas como "camion" o "moto"
-    tipo: str = Field(default="carro", pattern="^(carro|motocicleta)$")
-    # ge=0 impide valores negativos de kilometraje desde la API
+    # El tipo se restringe a los valores admitidos por el taller: evita
+    # clasificaciones inventadas como "camion" o "moto".
+    tipo: TipoVehiculo = Field(default=TipoVehiculo.CARRO)
+    # ge=0 impide valores negativos de kilometraje desde la API.
     kilometraje_actual: int | None = Field(default=0, ge=0)
     fecha_compra: datetime | None = Field(default=None)
 
 
 class VehiculoResponse(BaseModel):
-    """Schema de respuesta para vehículos. Incluye el ID generado."""
+    """Vehículo devuelto por la API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     placa: str
     marca: str
     modelo: str
-    tipo: str
+    tipo: TipoVehiculo
     kilometraje_actual: int | None
     fecha_compra: datetime | None
 
-    model_config = ConfigDict(from_attributes=True)
-
 
 class UsuarioCreate(BaseModel):
+    """Datos para registrar un usuario nuevo."""
+
     model_config = ConfigDict(extra="forbid")
 
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=50)
 
+    @field_validator("email")
+    @classmethod
+    def normalizar_email(cls, email: str) -> str:
+        """Normaliza el correo a minúsculas.
+
+        Evita que "Taller@Example.com" y "taller@example.com" se registren
+        como dos cuentas distintas.
+        """
+        return email.lower()
+
     @field_validator("password")
     @classmethod
     def validar_longitud_bcrypt(cls, password: str) -> str:
+        """Bcrypt solo procesa los primeros 72 bytes de la contraseña."""
         if len(password.encode("utf-8")) > 72:
             raise ValueError("La contraseña no puede superar 72 bytes en UTF-8.")
         return password
 
 
 class RegistroRespuesta(BaseModel):
+    """Respuesta genérica del registro de usuarios."""
+
     mensaje: str
 
 
 class UsuarioResponse(BaseModel):
-    id: int
-    email: EmailStr
-    rol: str
-    is_active: bool
+    """Usuario devuelto por la API (nunca incluye la contraseña)."""
 
     model_config = ConfigDict(from_attributes=True)
 
+    id: int
+    email: EmailStr
+    rol: RolUsuario
+    is_active: bool
+
 
 class MantenimientoCreate(BaseModel):
-    vehiculo_id: int
+    """Datos para registrar un mantenimiento."""
+
+    vehiculo_id: int = Field(..., ge=1)
     descripcion: str = Field(..., min_length=5, max_length=500)
-    # estado no tiene pattern porque el frontend puede enviar valores
-    # como "pendiente", "en_progreso", "completado", etc.
-    estado: str = Field(default="pendiente", max_length=30)
+    estado: EstadoMantenimiento = Field(default=EstadoMantenimiento.PENDIENTE)
     es_revision: bool = Field(
         default=False,
-        description="Indica si el mantenimiento cuenta como revisión oficial del vehículo.",
+        description=(
+            "Indica si el mantenimiento cuenta como revisión oficial del vehículo."
+        ),
     )
-    # ge=0 evita costos negativos (no tendría sentido en un taller)
+    # ge=0 evita costos negativos (no tendría sentido en un taller).
     costo_estimado: int | None = Field(default=None, ge=0)
     kilometraje: int | None = Field(default=None, ge=0)
     fecha_programada: datetime | None = Field(default=None)
 
 
 class MantenimientoUpdate(BaseModel):
+    """Datos para actualizar un mantenimiento existente."""
+
     descripcion: str = Field(..., min_length=5, max_length=500)
-    estado: str = Field(..., max_length=30)
+    estado: EstadoMantenimiento
     es_revision: bool | None = None
     costo_estimado: int | None = Field(default=None, ge=0)
     kilometraje: int | None = Field(default=None, ge=0)
@@ -81,10 +111,14 @@ class MantenimientoUpdate(BaseModel):
 
 
 class MantenimientoResponse(BaseModel):
+    """Mantenimiento devuelto por la API."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     id: int
     vehiculo_id: int
     descripcion: str
-    estado: str
+    estado: EstadoMantenimiento
     es_revision: bool
     costo_estimado: int | None
     kilometraje: int | None
@@ -92,13 +126,35 @@ class MantenimientoResponse(BaseModel):
     fecha_completado: datetime | None
     fecha_creacion: datetime
 
-    model_config = ConfigDict(from_attributes=True)
-
 
 class ProximoMantenimientoResponse(BaseModel):
-    servicio_numero: str
-    kilometraje_objetivo: int
-    kilometraje_faltante: int
-    meses_desde_compra: int
-    fecha_sugerida: datetime | None = None
+    """Recomendación del próximo mantenimiento de un vehículo."""
+
+    servicio_numero: str = Field(
+        ...,
+        description=(
+            "Nombre del servicio recomendado, por ejemplo "
+            "'2da Revisión de Mantenimiento'."
+        ),
+    )
+    kilometraje_objetivo: int = Field(
+        ..., description="Kilometraje objetivo del servicio recomendado."
+    )
+    kilometraje_faltante: int = Field(
+        ..., description="Kilometraje que falta por recorrer."
+    )
+    meses_desde_compra: int = Field(
+        ...,
+        description=(
+            "Meses que el plan del taller asigna a este nivel de servicio "
+            "desde la fecha de compra del vehículo."
+        ),
+    )
+    fecha_sugerida: datetime | None = Field(
+        default=None,
+        description=(
+            "Fecha estimada del próximo servicio, si hay una fecha de "
+            "referencia conocida."
+        ),
+    )
     descripcion_sugerida: str
