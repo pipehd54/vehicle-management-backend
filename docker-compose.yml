@@ -19,6 +19,23 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
+
+  # Aplica las migraciones antes de levantar la API y vuelve a terminar.
+  # Así el esquema de la base de datos siempre está al día al arrancar.
+  migraciones:
+    build: .
+    container_name: taller-migraciones
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      ALGORITHM: ${ALGORITHM:-HS256}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
 
   api:
     build: .
@@ -29,6 +46,9 @@ services:
       ALGORITHM: ${ALGORITHM:-HS256}
       ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-60}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      TRUSTED_PROXY_IPS: ${TRUSTED_PROXY_IPS:-}
+      APP_ENV: ${APP_ENV:-desarrollo}
+      PORT: 8000
     ports:
       - "8000:8000"
     depends_on:
@@ -37,7 +57,22 @@ services:
         # Esto reemplaza el depends_on simple que solo esperaba
         # que el contenedor iniciara, no que Postgres estuviera listo.
         condition: service_healthy
+      migraciones:
+        # Y solo cuando las migraciones han terminado bien.
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).status == 200 else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
 
 volumes:
   postgres_data:
-

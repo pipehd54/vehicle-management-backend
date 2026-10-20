@@ -1,237 +1,219 @@
 # Vehicle Management Backend
 
 ![CI](https://github.com/pipehd54/vehicle-management-backend/actions/workflows/ci.yml/badge.svg)
+![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13-3776AB?logo=python&logoColor=white)
+![Ruff](https://img.shields.io/badge/code%20style-ruff-261230)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-API REST para apoyar la gestión básica de un taller mecánico. Permite registrar usuarios, autenticar con JWT y administrar vehículos junto con sus mantenimientos mediante un control de acceso basado en roles (RBAC).
+API REST para apoyar la gestión básica de un taller mecánico: vehículos,
+mantenimientos y usuarios con autenticación JWT y control de acceso por roles
+(RBAC).
 
-Este es un proyecto personal de portafolio desarrollado como estudiante de Ingeniería de Sistemas. Su objetivo es practicar la construcción de una API backend con herramientas habituales del ecosistema Python, manteniendo una estructura simple y fácil de entender.
+Proyecto personal de portafolio, desarrollado como estudiante de Ingeniería de
+Sistemas. El objetivo es construir una API backend con las herramientas
+habituales del ecosistema Python, manteniendo una estructura simple, tipada y
+fácil de extender.
 
-- **🌐 Frontend en producción (Vercel):** [https://vehicle-management-frontend-ruby.vercel.app/](https://vehicle-management-frontend-ruby.vercel.app/)
-- **🚀 API en producción (Railway):** [https://vehicle-management-backend-production-e9f4.up.railway.app](https://vehicle-management-backend-production-e9f4.up.railway.app/)
-- **📖 Documentación interactiva:** [https://vehicle-management-backend-production-e9f4.up.railway.app/docs](https://vehicle-management-backend-production-e9f4.up.railway.app/docs)
+- **🌐 Frontend en producción (Vercel):** [vehicle-management-frontend-ruby.vercel.app](https://vehicle-management-frontend-ruby.vercel.app/)
+- **🚀 API en producción (Railway):** [vehicle-management-backend-production-e9f4.up.railway.app](https://vehicle-management-backend-production-e9f4.up.railway.app)
+- **📖 Documentación interactiva:** `/docs` (deshabilitada en producción)
 
 ---
 
-## Funcionalidades
+## ✨ Funcionalidades
 
-- Registro e inicio de sesión de usuarios (las cuentas requieren activación por un administrador).
-- El registro devuelve una confirmación genérica para no revelar si un correo ya existe.
-- Autenticación mediante tokens JWT (clave mínima de 32 caracteres, algoritmo fijado).
-- Límite de intentos en login y registro por IP; no bloquea cuentas por username.
-- Contraseñas almacenadas con hash seguro de bcrypt.
-- Control de Acceso Basado en Roles (RBAC):
-  - **Mecánico:** Crear/Consultar vehículos y crear/actualizar mantenimientos.
-  - **Administrador:** Además de las funciones anteriores, tiene permisos exclusivos para eliminar registros.
-- CRUD de vehículos.
-- CRUD de mantenimientos asociados a un vehículo.
-- Las recomendaciones cuentan solo mantenimientos completados marcados como revisión oficial (`es_revision: true`).
-- Paginación en los listados de vehículos y mantenimientos.
-- Health check para comprobar la conexión con la base de datos.
-- Migraciones de base de datos con Alembic.
-- Pruebas locales con SQLite en memoria y validación de integración/migraciones con PostgreSQL en CI.
-- Contenedores para API y PostgreSQL mediante Docker Compose.
+- Registro e inicio de sesión con **JWT** y contraseñas cifradas con **bcrypt**.
+- Las cuentas registradas nacen **inactivas**: un administrador las activa.
+- El registro devuelve una respuesta genérica, para no revelar si un correo ya existe.
+- **RBAC**: mecánico (crear, consultar y actualizar) y administrador (además, eliminar y activar cuentas).
+- CRUD de vehículos y de sus mantenimientos, con paginación y filtros.
+- **Motor de mantenimiento**: cálculo del próximo servicio según el manual del taller.
+- Límite de intentos por IP y por cuenta, con soporte para proxies inversos.
+- Health check de la API y de la base de datos.
+- Migraciones con **Alembic** y pruebas automatizadas con **pytest**.
 
-## Tecnologías
+## 🧰 Stack
 
-- Python 3.12
-- FastAPI
-- SQLAlchemy Async
-- PostgreSQL
-- Alembic
-- Pydantic v2
-- PyJWT y bcrypt
-- Pytest, pytest-asyncio, HTTPX y aiosqlite
-- Docker y Docker Compose
+| Capa | Tecnología |
+| --- | --- |
+| API | FastAPI 0.137, Uvicorn |
+| Datos | SQLAlchemy 2.0 (async) + asyncpg + PostgreSQL 16 |
+| Validación | Pydantic v2 + pydantic-settings |
+| Seguridad | PyJWT, bcrypt |
+| Migraciones | Alembic |
+| Pruebas | pytest, pytest-asyncio, httpx, pytest-cov |
+| Calidad | Ruff (linter + formateador), mypy |
+| Despliegue | Docker, Docker Compose, Railway |
 
-## Estructura del proyecto
+## 🚀 Inicio rápido
 
-```text
-.
-├── alembic/              # Migraciones de la base de datos
-├── app/
-│   ├── routers/          # Endpoints de usuarios, vehículos y mantenimientos
-│   ├── config.py         # Configuración por variables de entorno
-│   ├── database.py       # Motor y sesiones asíncronas
-│   ├── depends.py        # Dependencias de seguridad y roles (RBAC)
-│   ├── models.py         # Modelos de SQLAlchemy
-│   ├── rate_limit.py     # Límite de solicitudes por IP
-│   ├── schemas.py        # Modelos de validación Pydantic
-│   └── security.py       # Hash de contraseñas y JWT
-├── tests/                # Pruebas automatizadas
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-├── requirements-dev.txt
-└── README.md
-```
+```bash
+git clone https://github.com/pipehd54/vehicle-management-backend.git
+cd vehicle-management-backend
 
-## Requisitos
-
-- Python 3.12 o superior
-- PostgreSQL 16, si se ejecuta sin Docker
-- Docker Desktop y Docker Compose, si se ejecuta con contenedores
-
-## Variables de entorno
-
-Copia `.env.example` como `.env` en la raíz del proyecto. Cambia las claves de ejemplo antes de usarlo y no subas `.env` al repositorio.
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Para ejecutar la aplicación localmente con PostgreSQL, cambia el host de `DATABASE_URL` de `db` a `localhost`:
-
-```env
-DATABASE_URL=postgresql+asyncpg://taller_user:tu_password@localhost:5432/taller_db
-SECRET_KEY=una_clave_larga_y_secreta_de_al_menos_32_caracteres
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=60
-CORS_ORIGINS=http://localhost:3000,http://localhost:5173,https://vehicle-management-frontend-ruby.vercel.app
-```
-
-Para Docker Compose, usa el nombre del servicio `db` como host y define además la contraseña de PostgreSQL:
-
-```env
-POSTGRES_DB=taller_db
-POSTGRES_USER=taller_user
-POSTGRES_PASSWORD=tu_password
-DATABASE_URL=postgresql+asyncpg://taller_user:tu_password@db:5432/taller_db
-SECRET_KEY=una_clave_larga_y_secreta_de_al_menos_32_caracteres
-```
-
-`CORS_ORIGINS` admite varios orígenes separados por comas, por ejemplo: `http://localhost:3000,http://localhost:5173,https://vehicle-management-frontend-ruby.vercel.app`.
-Compose pasa este valor al contenedor API. PostgreSQL solo se publica en loopback; usa `POSTGRES_PORT` para cambiar el puerto local.
-El limitador por IP vive en memoria de cada proceso y tiene capacidad máxima. Para varios workers o réplicas, aplica la cuota compartida en un gateway o almacén común.
-
-## Ejecutar con Docker
-
-1. Crea el archivo `.env` con las variables del apartado anterior.
-2. Construye e inicia los servicios:
-
-```powershell
-docker compose up --build
-```
-
-3. En otra terminal, aplica las migraciones:
-
-```powershell
-docker compose exec api alembic upgrade head
-```
-
-La API estará disponible en `http://localhost:8000` y la documentación interactiva en `http://localhost:8000/docs`.
-
-Para detener los servicios:
-
-```powershell
-docker compose down
-```
-
-## Ejecutar localmente
-
-1. Crea y activa un entorno virtual:
-
-```powershell
 python -m venv .venv
-.\.venv\Scripts\activate
-```
+source .venv/bin/activate          # Windows: .\.venv\Scripts\activate
+pip install -e ".[dev]"
 
-2. Instala las dependencias:
+cp .env.example .env                # Windows: Copy-Item .env.example .env
+# genera una SECRET_KEY de verdad:
+python -c "import secrets; print(secrets.token_urlsafe(48))"
 
-```powershell
-pip install -r requirements-dev.txt
-```
-
-3. Crea la base de datos en PostgreSQL y configura el archivo `.env`.
-
-4. Aplica las migraciones:
-
-```powershell
 alembic upgrade head
-```
-
-5. Inicia la API:
-
-```powershell
 uvicorn app.main:app --reload
 ```
 
-## Endpoints principales
+La API queda en `http://localhost:8000` y la documentación en
+`http://localhost:8000/docs`.
+
+## 📁 Estructura
+
+```text
+.
+├── app/
+│   ├── main.py             # Punto de entrada: middlewares, lifespan, routers
+│   ├── configuracion.py    # Settings (variables de entorno validadas)
+│   ├── base_datos.py       # Motor asíncrono y sesiones
+│   ├── modelos.py          # Modelos SQLAlchemy
+│   ├── esquemas.py         # Schemas de Pydantic (entrada/salida)
+│   ├── enums.py            # Rol, estado de mantenimiento y tipo de vehículo
+│   ├── seguridad.py        # bcrypt, emisión y validación de JWT
+│   ├── dependencias.py     # Dependencias de autorización (RBAC)
+│   ├── limitador.py        # Límite de intentos por IP y por cuenta
+│   ├── errores.py          # Errores HTTP reutilizables
+│   ├── repositorio.py      # Consultas compartidas por los routers
+│   ├── servicios/          # Lógica de negocio pura (sin HTTP ni base de datos)
+│   │   └── programa_mantenimiento.py
+│   └── routers/            # Endpoints por recurso
+├── alembic/                # Migraciones
+├── tests/
+│   ├── unit/               # Pruebas puras (motor de mantenimiento)
+│   └── api/                # Pruebas de endpoints
+├── pyproject.toml          # Dependencias y configuración de herramientas
+├── Dockerfile
+└── docker-compose.yml
+```
+
+## 🔌 Endpoints
 
 | Método | Endpoint | Descripción | Acceso |
 | --- | --- | --- | --- |
 | `GET` | `/` | Mensaje de bienvenida | Público |
-| `GET` | `/health` | Estado de la API y la base de datos | Público |
-| `POST` | `/usuarios/` | Registra un usuario como mecánico inactivo (pendiente de activación) | Público (limitado por IP) |
-| `POST` | `/usuarios/login` | Devuelve un token JWT (solo cuentas activas) | Público (limitado por IP) |
-| `GET` | `/usuarios/pendientes` | Lista cuentas pendientes de activación | JWT (Solo Admin) |
-| `PATCH` | `/usuarios/{usuario_id}/activar` | Activa una cuenta registrada | JWT (Solo Admin) |
+| `GET` | `/health` | Estado de la API y de la base de datos | Público |
+| `POST` | `/usuarios/` | Registra una cuenta (mecánico, inactiva) | Público (limitado) |
+| `POST` | `/usuarios/login` | Devuelve un token JWT | Público (limitado) |
+| `GET` | `/usuarios/pendientes` | Cuentas pendientes de activación | Solo admin |
+| `PATCH` | `/usuarios/{id}/activar` | Activa una cuenta | Solo admin |
 | `GET` | `/vehiculos/` | Lista vehículos paginados | JWT |
-| `GET` | `/vehiculos/{vehiculo_id}` | Consulta un vehículo | JWT |
+| `GET` | `/vehiculos/{id}` | Consulta un vehículo | JWT |
 | `POST` | `/vehiculos/` | Crea un vehículo | JWT |
-| `PUT` | `/vehiculos/{vehiculo_id}` | Actualiza un vehículo | JWT |
-| `DELETE` | `/vehiculos/{vehiculo_id}` | Elimina un vehículo y sus mantenimientos | JWT (Solo Admin) |
-| `GET` | `/mantenimientos/` | Lista mantenimientos paginados y filtrables | JWT |
-| `GET` | `/mantenimientos/{mantenimiento_id}` | Consulta un mantenimiento | JWT |
+| `PUT` | `/vehiculos/{id}` | Actualiza un vehículo | JWT |
+| `DELETE` | `/vehiculos/{id}` | Elimina un vehículo y sus mantenimientos | Solo admin |
+| `GET` | `/vehiculos/{id}/proximo-mantenimiento` | Próximo servicio recomendado | JWT |
+| `GET` | `/mantenimientos/` | Lista mantenimientos (filtro por vehículo) | JWT |
+| `GET` | `/mantenimientos/{id}` | Consulta un mantenimiento | JWT |
 | `POST` | `/mantenimientos/` | Crea un mantenimiento | JWT |
-| `PUT` | `/mantenimientos/{mantenimiento_id}` | Actualiza un mantenimiento | JWT |
-| `DELETE` | `/mantenimientos/{mantenimiento_id}` | Elimina un mantenimiento | JWT (Solo Admin) |
+| `PUT` | `/mantenimientos/{id}` | Actualiza un mantenimiento | JWT |
+| `DELETE` | `/mantenimientos/{id}` | Elimina un mantenimiento | Solo admin |
 
-### Paginación y filtro
+Paginación: `skip` (por defecto 0) y `limit` (por defecto 20, máximo 100).
+Filtro: `GET /mantenimientos/?vehiculo_id=1`.
 
-Los listados aceptan los parámetros `skip` y `limit`:
+## ⚙️ Variables de entorno
 
-```text
-GET /vehiculos/?skip=0&limit=20
-GET /mantenimientos/?skip=0&limit=20
-GET /mantenimientos/?vehiculo_id=1&skip=0&limit=20
+| Variable | Obligatoria | Por defecto | Descripción |
+| --- | --- | --- | --- |
+| `DATABASE_URL` | Sí | — | URL de PostgreSQL. Se normaliza a `postgresql+asyncpg://` |
+| `SECRET_KEY` | Sí | — | Clave de firma JWT (mínimo 32 caracteres) |
+| `ALGORITHM` | No | `HS256` | Algoritmo JWT (lista blanca: HS256/384/512) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | No | `60` | Vigencia del token (1 minuto – 7 días) |
+| `CORS_ORIGINS` | No | `localhost:3000,5173` | Orígenes del frontend, separados por comas |
+| `APP_ENV` | No | `desarrollo` | `desarrollo` \| `produccion` \| `pruebas` |
+| `TRUSTED_PROXY_IPS` | No | vacío | Proxies de confianza para leer `X-Forwarded-For` |
+
+La aplicación **falla al arrancar** si falta una variable obligatoria, si la
+clave es demasiado corta o si todavía es el valor de ejemplo: es preferible
+que el despliegue falle de forma visible a que quede una clave pública.
+
+## 🧠 Decisiones de diseño
+
+- **El rol se lee siempre de la base de datos**, nunca del token. Un cambio de
+  rol surte efecto de inmediato y el claim `rol` del JWT es solo informativo.
+- **JWT sin estado**: no hay lista de revocación, pero cada petición
+  relee `is_active`, así que desactivar una cuenta corta el acceso al
+  instante.
+- **Contraseñas con bcrypt** y límite de 72 bytes, validado en el schema.
+- **Comparación de tiempo constante en el login**: si el correo no existe se
+  compara contra un hash señuelo, para que el tiempo de respuesta no permita
+  enumerar cuentas.
+- **Solo se cuentan los intentos fallidos** al aplicar el límite: el tráfico
+  legítimo no agota la cuota por IP detrás de un proxy.
+- **La lógica de mantenimiento es una función pura** en
+  `app/servicios/programa_mantenimiento.py`: sin FastAPI ni base de datos,
+  se testea en milisegundos y se puede reutilizar desde un script.
+- **Enumeraciones en lugar de cadenas sueltas** para rol, estado y tipo de
+  vehículo: la API responde 422 ante un estado desconocido en lugar de
+  guardarlo.
+- **Herramientas declaradas en `pyproject.toml`**: una sola fuente de verdad
+  para dependencias, linter, formateador, pruebas y cobertura.
+
+## 🔧 Reglas del motor de mantenimiento
+
+El próximo servicio se calcula con el **mayor** entre el nivel deducido del
+kilometraje y el nivel que indica el historial de revisiones completadas:
+
+| Kilometraje | Nivel | Objetivo |
+| --- | --- | --- |
+| < 500 km | 1 | 500 km |
+| < 3 000 km | 2 | 3 000 km |
+| < 6 000 km | 3 | 6 000 km |
+| < 9 000 km | 4 | 9 000 km |
+| < 12 000 km | 5 | 12 000 km |
+| ≥ 12 000 km | 5 + tramos de 3 000 km | 15 000 km, 18 000 km, … |
+
+La fecha sugerida se cuenta desde el último servicio completado o, si no
+existe, desde la fecha de compra del vehículo.
+
+## 🧪 Pruebas
+
+```bash
+pytest -q                                  # usa SQLite en memoria
+pytest -q --cov=app --cov-report=term-missing
 ```
 
-`skip` empieza en `0`. `limit` tiene un valor por defecto de `20` y acepta un máximo de `100`.
+Por defecto las pruebas usan SQLite asíncrono en memoria. Definiendo
+`TEST_DATABASE_URL` se ejecutan contra PostgreSQL (es lo que hace CI).
 
-## Ejemplos de uso
+La suite cubre autenticación, autorización, control de acceso por rol, CRUD
+de vehículos y mantenimientos, paginación, filtros, borrado en cascada, el
+límite de intentos y el motor de mantenimiento.
 
-Registrar un usuario:
+En CI se ejecutan además el linter, el formateador, la validación de las
+migraciones sobre PostgreSQL, la auditoría de dependencias y la construcción
+de la imagen de Docker.
 
-```json
-{
-  "email": "mecanico@example.com",
-  "password": "password123"
-}
+## 🐳 Docker
+
+```bash
+cp .env.example .env    # y genera una SECRET_KEY real
+docker compose up --build
 ```
 
-Crear un vehículo:
+Compose levanta PostgreSQL, aplica las migraciones y arranca la API con el
+esquema ya actualizado. La API queda en `http://localhost:8000`.
 
-```json
-{
-  "placa": "XYZ-123",
-  "marca": "Toyota",
-  "modelo": "Corolla"
-}
-```
+## 🔒 Seguridad
 
-Crear un mantenimiento:
+- Autenticación JWT con algoritmo de lista blanca y clave de 32 caracteres mínimo.
+- Contraseñas cifradas con bcrypt; nunca se devuelven en las respuestas.
+- Limitador de intentos por IP y por par (cuenta, IP), en memoria y por proceso.
+- Autorización por rol resuelta contra la base de datos en cada petición.
+- Cabeceras de seguridad (`X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy`, `Permissions-Policy` y HSTS bajo HTTPS).
+- CORS con lista explícita de orígenes; el comodín `*` está prohibido.
+- Contenedor sin privilegios y usuario no root.
+- La documentación interactiva se desactiva en `APP_ENV=produccion`.
 
-```json
-{
-  "vehiculo_id": 1,
-  "descripcion": "Cambio de aceite y revisión general",
-  "estado": "pendiente",
-  "costo_estimado": 120000
-}
-```
+## 📄 Licencia
 
-En los endpoints protegidos, incluye el token obtenido en el login:
-
-```text
-Authorization: Bearer <access_token>
-```
-
-## Pruebas
-
-Por defecto, las pruebas locales usan SQLite asíncrono en memoria. En CI se ejecutan contra el servicio PostgreSQL y se aplica también la cadena de migraciones.
-
-```powershell
-pytest -q
-```
-
-La suite cubre autenticación, autorización sin token, control de acceso RBAC por rol de administrador vs mecánico, CRUD de vehículos, CRUD de mantenimientos, paginación, filtros y borrado en cascada.
+MIT. Consulta [LICENSE](LICENSE).
