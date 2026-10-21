@@ -82,12 +82,13 @@ La API queda en `http://localhost:8000` y la documentación en
 │   ├── limitador.py        # Límite de intentos por IP y por cuenta
 │   ├── errores.py          # Errores HTTP reutilizables
 │   ├── repositorio.py      # Consultas compartidas por los routers
+│   ├── cli.py              # Utilidades de administración (crear-admin)
 │   ├── servicios/          # Lógica de negocio pura (sin HTTP ni base de datos)
 │   │   └── programa_mantenimiento.py
 │   └── routers/            # Endpoints por recurso
 ├── alembic/                # Migraciones
 ├── tests/
-│   ├── unit/               # Pruebas puras (motor de mantenimiento)
+│   ├── unit/               # Pruebas puras (motor de mantenimiento, CLI)
 │   └── api/                # Pruebas de endpoints
 ├── pyproject.toml          # Dependencias y configuración de herramientas
 ├── Dockerfile
@@ -102,22 +103,55 @@ La API queda en `http://localhost:8000` y la documentación en
 | `GET` | `/health` | Estado de la API y de la base de datos | Público |
 | `POST` | `/usuarios/` | Registra una cuenta (mecánico, inactiva) | Público (limitado) |
 | `POST` | `/usuarios/login` | Devuelve un token JWT | Público (limitado) |
+| `GET` | `/usuarios/me` | Datos del usuario autenticado | JWT |
+| `POST` | `/usuarios/me/cambiar-password` | Cambia la contraseña propia | JWT |
 | `GET` | `/usuarios/pendientes` | Cuentas pendientes de activación | Solo admin |
 | `PATCH` | `/usuarios/{id}/activar` | Activa una cuenta | Solo admin |
+| `PATCH` | `/usuarios/{id}/desactivar` | Desactiva una cuenta y le corta el acceso | Solo admin |
 | `GET` | `/vehiculos/` | Lista vehículos paginados | JWT |
 | `GET` | `/vehiculos/{id}` | Consulta un vehículo | JWT |
 | `POST` | `/vehiculos/` | Crea un vehículo | JWT |
-| `PUT` | `/vehiculos/{id}` | Actualiza un vehículo | JWT |
+| `PATCH` | `/vehiculos/{id}` | Actualiza un vehículo | JWT |
+| `PUT` | `/vehiculos/{id}` | Actualiza un vehículo (alias de `PATCH`) | JWT |
 | `DELETE` | `/vehiculos/{id}` | Elimina un vehículo y sus mantenimientos | Solo admin |
 | `GET` | `/vehiculos/{id}/proximo-mantenimiento` | Próximo servicio recomendado | JWT |
 | `GET` | `/mantenimientos/` | Lista mantenimientos (filtro por vehículo) | JWT |
 | `GET` | `/mantenimientos/{id}` | Consulta un mantenimiento | JWT |
 | `POST` | `/mantenimientos/` | Crea un mantenimiento | JWT |
-| `PUT` | `/mantenimientos/{id}` | Actualiza un mantenimiento | JWT |
+| `PATCH` | `/mantenimientos/{id}` | Actualiza un mantenimiento | JWT |
+| `PUT` | `/mantenimientos/{id}` | Actualiza un mantenimiento (alias de `PATCH`) | JWT |
 | `DELETE` | `/mantenimientos/{id}` | Elimina un mantenimiento | Solo admin |
 
 Paginación: `skip` (por defecto 0) y `limit` (por defecto 20, máximo 100).
 Filtro: `GET /mantenimientos/?vehiculo_id=1`.
+
+### Actualizaciones parciales
+
+`PUT` y `PATCH` se comportan igual: **solo se modifican los campos enviados**.
+Un campo omitido conserva su valor actual.
+
+```jsonc
+// El vehículo conserva su kilometraje (48.000 km) y su fecha de compra.
+{ "marca": "Mazda" }
+```
+
+Sin esta regla, un cliente que actualizara solo la marca reiniciaría el
+odómetro a cero y borraría el presupuesto de un mantenimiento.
+
+## 🛠️ Administración
+
+El registro público solo crea cuentas de mecánico, y nacen inactivas: hace
+falta un administrador para activarlas. El primer administrador se crea con
+la herramienta de línea de comandos, sin tocar la base de datos a mano:
+
+```bash
+python -m app.cli crear-admin --email admin@taller.com
+# La contraseña se solicita de forma oculta si no se pasa con --password.
+```
+
+Después, con la cuenta ya activa, el resto de la gestión de usuarios se hace
+desde la API: `GET /usuarios/pendientes`, `PATCH /usuarios/{id}/activar` y
+`PATCH /usuarios/{id}/desactivar`.
 
 ## ⚙️ Variables de entorno
 
@@ -154,6 +188,11 @@ que el despliegue falle de forma visible a que quede una clave pública.
 - **Enumeraciones en lugar de cadenas sueltas** para rol, estado y tipo de
   vehículo: la API responde 422 ante un estado desconocido en lugar de
   guardarlo.
+- **Actualizaciones parciales**: `PUT` y `PATCH` se comportan igual y solo
+  modifican los campos enviados, para que actualizar un campo no destruya
+  los demás.
+- **El primer administrador se crea con una herramienta**, no con SQL: la API
+  no expone ningún endpoint que conceda el rol de administrador.
 - **Herramientas declaradas en `pyproject.toml`**: una sola fuente de verdad
   para dependencias, linter, formateador, pruebas y cobertura.
 
@@ -185,8 +224,9 @@ Por defecto las pruebas usan SQLite asíncrono en memoria. Definiendo
 `TEST_DATABASE_URL` se ejecutan contra PostgreSQL (es lo que hace CI).
 
 La suite cubre autenticación, autorización, control de acceso por rol, CRUD
-de vehículos y mantenimientos, paginación, filtros, borrado en cascada, el
-límite de intentos y el motor de mantenimiento.
+de vehículos y mantenimientos, actualizaciones parciales, paginación, filtros,
+borrado en cascada, el ciclo de vida de las cuentas, el límite de intentos y
+el motor de mantenimiento.
 
 En CI se ejecutan además el linter, el formateador, la validación de las
 migraciones sobre PostgreSQL, la auditoría de dependencias y la construcción

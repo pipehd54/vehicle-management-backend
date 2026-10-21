@@ -9,7 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.base_datos import get_db
 from app.dependencias import requiere_admin
 from app.enums import RolUsuario
-from app.esquemas import RegistroRespuesta, UsuarioCreate, UsuarioResponse
+from app.esquemas import (
+    CambiarPassword,
+    RegistroRespuesta,
+    UsuarioCreate,
+    UsuarioResponse,
+)
 from app.limitador import (
     comprobar_limite_login,
     registrar_fallo_login,
@@ -21,6 +26,7 @@ from app.seguridad import (
     HASH_SENUELO,
     crear_token_acceso,
     obtener_hash_password,
+    obtener_usuario_actual,
     verificar_password,
 )
 
@@ -108,6 +114,39 @@ async def login(
     return {"access_token": token, "token_type": "bearer"}
 
 
+@router.get("/me", response_model=UsuarioResponse)
+async def mi_usuario(usuario_actual: UsuarioDB = Depends(obtener_usuario_actual)):
+    """Devuelve los datos del usuario autenticado.
+
+    Es la fuente fiable de "quién soy": el rol se lee de la base de datos,
+    no del token, que puede estar desfasado.
+    """
+    return usuario_actual
+
+
+@router.post("/me/cambiar-password")
+async def cambiar_password(
+    datos: CambiarPassword,
+    db: AsyncSession = Depends(get_db),
+    usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
+):
+    """Cambia la contraseña del usuario autenticado.
+
+    Exige la contraseña actual: sin ella, un token robado permitiría
+    dejar la cuenta inutilizable para su dueño.
+    """
+    if not verificar_password(datos.password_actual, usuario_actual.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="La contraseña actual no es correcta.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    usuario_actual.hashed_password = obtener_hash_password(datos.password_nuevo)
+    await db.commit()
+    return {"mensaje": "La contraseña se actualizó correctamente."}
+
+
 @router.get("/pendientes", response_model=list[UsuarioResponse])
 async def listar_cuentas_pendientes(
     db: AsyncSession = Depends(get_db),
@@ -119,6 +158,31 @@ async def listar_cuentas_pendientes(
     )
     resultado = await db.execute(consulta)
     return list(resultado.scalars().all())
+
+
+@router.patch("/{usuario_id}/desactivar", response_model=UsuarioResponse)
+async def desactivar_usuario(
+    usuario_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin_actual: UsuarioDB = Depends(requiere_admin),
+):
+    """Desactiva una cuenta y le corta el acceso de inmediato.
+
+    El token sigue siendo válido hasta su expiración, pero cada petición
+    vuelve a leer `is_active` de la base de datos, así que la cuenta queda
+    inutilizable en el acto. Solo admin.
+    """
+    if usuario_id == admin_actual.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No puedes desactivar tu propia cuenta.",
+        )
+
+    usuario = await obtener_usuario_o_404(usuario_id, db)
+    usuario.is_active = False
+    await db.commit()
+    await db.refresh(usuario)
+    return usuario
 
 
 @router.patch("/{usuario_id}/activar", response_model=UsuarioResponse)
