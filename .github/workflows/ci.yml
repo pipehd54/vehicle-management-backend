@@ -111,7 +111,7 @@ jobs:
         if: matrix.python-version == '3.12'
         run: |
           {
-            echo "## 📊 Cobertura"
+            echo "## Cobertura"
             echo '```'
             coverage report -m
             echo '```'

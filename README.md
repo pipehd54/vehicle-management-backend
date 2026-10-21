@@ -14,13 +14,13 @@ Sistemas. El objetivo es construir una API backend con las herramientas
 habituales del ecosistema Python, manteniendo una estructura simple, tipada y
 fácil de extender.
 
-- **🌐 Frontend en producción (Vercel):** [vehicle-management-frontend-ruby.vercel.app](https://vehicle-management-frontend-ruby.vercel.app/)
-- **🚀 API en producción (Railway):** [vehicle-management-backend-production-e9f4.up.railway.app](https://vehicle-management-backend-production-e9f4.up.railway.app)
-- **📖 Documentación interactiva:** `/docs` (deshabilitada en producción)
+- **Frontend en producción (Vercel):** [vehicle-management-frontend-ruby.vercel.app](https://vehicle-management-frontend-ruby.vercel.app/)
+- **API en producción (Railway):** [vehicle-management-backend-production-e9f4.up.railway.app](https://vehicle-management-backend-production-e9f4.up.railway.app)
+- **Documentación interactiva:** `/docs` (deshabilitada en producción)
 
 ---
 
-## ✨ Funcionalidades
+## Funcionalidades
 
 - Registro e inicio de sesión con **JWT** y contraseñas cifradas con **bcrypt**.
 - Las cuentas registradas nacen **inactivas**: un administrador las activa.
@@ -32,7 +32,7 @@ fácil de extender.
 - Health check de la API y de la base de datos.
 - Migraciones con **Alembic** y pruebas automatizadas con **pytest**.
 
-## 🧰 Stack
+## Stack
 
 | Capa | Tecnología |
 | --- | --- |
@@ -45,7 +45,7 @@ fácil de extender.
 | Calidad | Ruff (linter + formateador), mypy |
 | Despliegue | Docker, Docker Compose, Railway |
 
-## 🚀 Inicio rápido
+## Inicio rápido
 
 ```bash
 git clone https://github.com/pipehd54/vehicle-management-backend.git
@@ -66,7 +66,7 @@ uvicorn app.main:app --reload
 La API queda en `http://localhost:8000` y la documentación en
 `http://localhost:8000/docs`.
 
-## 📁 Estructura
+## Estructura
 
 ```text
 .
@@ -95,7 +95,7 @@ La API queda en `http://localhost:8000` y la documentación en
 └── docker-compose.yml
 ```
 
-## 🔌 Endpoints
+## Endpoints
 
 | Método | Endpoint | Descripción | Acceso |
 | --- | --- | --- | --- |
@@ -138,7 +138,7 @@ Un campo omitido conserva su valor actual.
 Sin esta regla, un cliente que actualizara solo la marca reiniciaría el
 odómetro a cero y borraría el presupuesto de un mantenimiento.
 
-## 🛠️ Administración
+## Administración
 
 El registro público solo crea cuentas de mecánico, y nacen inactivas: hace
 falta un administrador para activarlas. El primer administrador se crea con
@@ -153,7 +153,7 @@ Después, con la cuenta ya activa, el resto de la gestión de usuarios se hace
 desde la API: `GET /usuarios/pendientes`, `PATCH /usuarios/{id}/activar` y
 `PATCH /usuarios/{id}/desactivar`.
 
-## ⚙️ Variables de entorno
+## Variables de entorno
 
 | Variable | Obligatoria | Por defecto | Descripción |
 | --- | --- | --- | --- |
@@ -169,7 +169,7 @@ La aplicación **falla al arrancar** si falta una variable obligatoria, si la
 clave es demasiado corta o si todavía es el valor de ejemplo: es preferible
 que el despliegue falle de forma visible a que quede una clave pública.
 
-## 🧠 Decisiones de diseño
+## Decisiones de diseño
 
 - **El rol se lee siempre de la base de datos**, nunca del token. Un cambio de
   rol surte efecto de inmediato y el claim `rol` del JWT es solo informativo.
@@ -196,7 +196,7 @@ que el despliegue falle de forma visible a que quede una clave pública.
 - **Herramientas declaradas en `pyproject.toml`**: una sola fuente de verdad
   para dependencias, linter, formateador, pruebas y cobertura.
 
-## 🔧 Reglas del motor de mantenimiento
+## Reglas del motor de mantenimiento
 
 El próximo servicio se calcula con el **mayor** entre el nivel deducido del
 kilometraje y el nivel que indica el historial de revisiones completadas:
@@ -213,7 +213,7 @@ kilometraje y el nivel que indica el historial de revisiones completadas:
 La fecha sugerida se cuenta desde el último servicio completado o, si no
 existe, desde la fecha de compra del vehículo.
 
-## 🧪 Pruebas
+## Pruebas
 
 ```bash
 pytest -q                                  # usa SQLite en memoria
@@ -232,7 +232,7 @@ En CI se ejecutan además el linter, el formateador, la validación de las
 migraciones sobre PostgreSQL, la auditoría de dependencias y la construcción
 de la imagen de Docker.
 
-## 🐳 Docker
+## Docker
 
 ```bash
 cp .env.example .env    # y genera una SECRET_KEY real
@@ -242,7 +242,7 @@ docker compose up --build
 Compose levanta PostgreSQL, aplica las migraciones y arranca la API con el
 esquema ya actualizado. La API queda en `http://localhost:8000`.
 
-## 🔒 Seguridad
+## Seguridad
 
 - Autenticación JWT con algoritmo de lista blanca y clave de 32 caracteres mínimo.
 - Contraseñas cifradas con bcrypt; nunca se devuelven en las respuestas.
@@ -254,6 +254,6 @@ esquema ya actualizado. La API queda en `http://localhost:8000`.
 - Contenedor sin privilegios y usuario no root.
 - La documentación interactiva se desactiva en `APP_ENV=produccion`.
 
-## 📄 Licencia
+## Licencia
 
 MIT. Consulta [LICENSE](LICENSE).
