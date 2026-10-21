@@ -8,7 +8,7 @@ from app.enums import EstadoMantenimiento, RolUsuario, TipoVehiculo
 
 
 class VehiculoCreate(BaseModel):
-    """Datos de entrada para crear o reemplazar un vehículo."""
+    """Datos de entrada para crear un vehículo."""
 
     placa: str = Field(
         ..., min_length=3, max_length=20, description="Placa del vehículo"
@@ -21,6 +21,21 @@ class VehiculoCreate(BaseModel):
     # ge=0 impide valores negativos de kilometraje desde la API.
     kilometraje_actual: int | None = Field(default=0, ge=0)
     fecha_compra: datetime | None = Field(default=None)
+
+
+class VehiculoPatch(BaseModel):
+    """Actualización parcial de un vehículo.
+
+    Todos los campos son opcionales: solo se modifican los que llegan en el
+    cuerpo de la petición. Un campo omitido conserva su valor actual.
+    """
+
+    placa: str | None = Field(default=None, min_length=3, max_length=20)
+    marca: str | None = Field(default=None, min_length=2, max_length=50)
+    modelo: str | None = Field(default=None, min_length=1, max_length=50)
+    tipo: TipoVehiculo | None = None
+    kilometraje_actual: int | None = Field(default=None, ge=0)
+    fecha_compra: datetime | None = None
 
 
 class VehiculoResponse(BaseModel):
@@ -100,14 +115,33 @@ class MantenimientoCreate(BaseModel):
 
 
 class MantenimientoUpdate(BaseModel):
-    """Datos para actualizar un mantenimiento existente."""
+    """Actualización parcial de un mantenimiento.
 
-    descripcion: str = Field(..., min_length=5, max_length=500)
-    estado: EstadoMantenimiento
+    Todos los campos son opcionales: solo se modifican los que llegan en el
+    cuerpo de la petición. Un campo omitido conserva su valor actual.
+    """
+
+    descripcion: str | None = Field(default=None, min_length=5, max_length=500)
+    estado: EstadoMantenimiento | None = None
     es_revision: bool | None = None
     costo_estimado: int | None = Field(default=None, ge=0)
     kilometraje: int | None = Field(default=None, ge=0)
-    fecha_programada: datetime | None = Field(default=None)
+    fecha_programada: datetime | None = None
+
+
+class CambiarPassword(BaseModel):
+    """Cambio de contraseña del usuario autenticado."""
+
+    password_actual: str = Field(..., min_length=1, max_length=72)
+    password_nuevo: str = Field(..., min_length=8, max_length=50)
+
+    @field_validator("password_nuevo")
+    @classmethod
+    def validar_longitud_bcrypt(cls, password: str) -> str:
+        """Bcrypt solo procesa los primeros 72 bytes de la contraseña."""
+        if len(password.encode("utf-8")) > 72:
+            raise ValueError("La contraseña no puede superar 72 bytes en UTF-8.")
+        return password
 
 
 class MantenimientoResponse(BaseModel):

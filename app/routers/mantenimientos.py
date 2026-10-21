@@ -17,6 +17,7 @@ from app.esquemas import (
 from app.modelos import MantenimientoDB, UsuarioDB
 from app.repositorio import (
     actualizar_kilometraje_vehiculo,
+    aplicar_cambios_parciales,
     obtener_mantenimiento_o_404,
     obtener_vehiculo_o_404,
 )
@@ -97,13 +98,18 @@ async def obtener_mantenimiento(
 
 
 @router.put("/{mantenimiento_id}", response_model=MantenimientoResponse)
+@router.patch("/{mantenimiento_id}", response_model=MantenimientoResponse)
 async def actualizar_mantenimiento(
     mantenimiento_id: int,
     mantenimiento_actualizado: MantenimientoUpdate,
     db: AsyncSession = Depends(get_db),
     usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
-    """Actualiza un mantenimiento existente.
+    """Actualiza un mantenimiento.
+
+    Es una actualización parcial: solo se modifican los campos enviados con
+    valor. Los campos omitidos conservan los que ya tenía el registro, de
+    modo que cambiar la descripción no borra el presupuesto del servicio.
 
     La fecha de cierre se registra al pasar a "completado" y **se conserva**
     cuando el estado cambia después: es un dato histórico del servicio
@@ -112,13 +118,9 @@ async def actualizar_mantenimiento(
     mantenimiento = await obtener_mantenimiento_o_404(mantenimiento_id, db)
 
     estado_anterior = mantenimiento.estado
-    mantenimiento.descripcion = mantenimiento_actualizado.descripcion
-    mantenimiento.estado = mantenimiento_actualizado.estado
-    if mantenimiento_actualizado.es_revision is not None:
-        mantenimiento.es_revision = mantenimiento_actualizado.es_revision
-    mantenimiento.costo_estimado = mantenimiento_actualizado.costo_estimado
-    mantenimiento.kilometraje = mantenimiento_actualizado.kilometraje
-    mantenimiento.fecha_programada = mantenimiento_actualizado.fecha_programada
+    aplicar_cambios_parciales(
+        mantenimiento, mantenimiento_actualizado.model_dump(exclude_none=True)
+    )
 
     if mantenimiento.estado == EstadoMantenimiento.COMPLETADO:
         # La fecha se sella al completar el servicio y se conserva después.

@@ -11,10 +11,12 @@ from app.errores import conflicto_integridad
 from app.esquemas import (
     ProximoMantenimientoResponse,
     VehiculoCreate,
+    VehiculoPatch,
     VehiculoResponse,
 )
 from app.modelos import UsuarioDB, VehiculoDB
 from app.repositorio import (
+    aplicar_cambios_parciales,
     contar_revisiones_completadas,
     obtener_vehiculo_o_404,
     ultima_revision_completada,
@@ -116,21 +118,24 @@ async def proximo_mantenimiento_recomendado(
 
 
 @router.put("/{vehiculo_id}", response_model=VehiculoResponse)
+@router.patch("/{vehiculo_id}", response_model=VehiculoResponse)
 async def actualizar_vehiculo(
     vehiculo_id: int,
-    vehiculo_actualizado: VehiculoCreate,
+    vehiculo_actualizado: VehiculoPatch,
     db: AsyncSession = Depends(get_db),
     usuario_actual: UsuarioDB = Depends(obtener_usuario_actual),
 ):
-    """Reemplaza los datos de un vehículo existente."""
+    """Actualiza un vehículo.
+
+    Es una actualización parcial: solo se modifican los campos enviados con
+    valor. Los campos omitidos conservan el que ya tenía el vehículo. PUT y
+    PATCH se comportan igual; PATCH es la forma canónica.
+    """
     vehiculo_db = await obtener_vehiculo_o_404(vehiculo_id, db)
 
-    vehiculo_db.placa = vehiculo_actualizado.placa
-    vehiculo_db.marca = vehiculo_actualizado.marca
-    vehiculo_db.modelo = vehiculo_actualizado.modelo
-    vehiculo_db.tipo = vehiculo_actualizado.tipo
-    vehiculo_db.kilometraje_actual = vehiculo_actualizado.kilometraje_actual
-    vehiculo_db.fecha_compra = vehiculo_actualizado.fecha_compra
+    aplicar_cambios_parciales(
+        vehiculo_db, vehiculo_actualizado.model_dump(exclude_none=True)
+    )
 
     try:
         await db.commit()

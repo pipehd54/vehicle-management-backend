@@ -80,6 +80,20 @@ async def ultima_revision_completada(
     return fecha_completado or fecha_creacion
 
 
+def aplicar_cambios_parciales(modelo: object, datos: dict[str, object]) -> None:
+    """Aplica al modelo únicamente los campos enviados con valor.
+
+    Es la regla de las actualizaciones parciales: un campo omitido (o enviado
+    como null) conserva su valor actual en lugar de sobrescribirse. Sin esto,
+    un cliente que actualiza solo la descripcion de un mantenimiento borraria
+    su presupuesto, y uno que actualiza solo la marca de un vehiculo
+    reiniciaria su kilometraje.
+    """
+    for campo, valor in datos.items():
+        if valor is not None:
+            setattr(modelo, campo, valor)
+
+
 def actualizar_kilometraje_vehiculo(
     vehiculo: VehiculoDB, kilometraje: int | None
 ) -> bool:

@@ -116,6 +116,59 @@ async def test_actualizar_mantenimiento(cliente, headers_autorizacion):
 
 
 @pytest.mark.asyncio
+async def test_actualizar_mantenimiento_conserva_los_campos_omitidos(
+    cliente, headers_autorizacion
+):
+    """Actualizar solo la descripción no borra el presupuesto del servicio.
+
+    Regresión: la actualización anterior sobrescribía con los valores por
+    defecto del schema y el costo, el kilometraje y la fecha programada
+    quedaban en null.
+    """
+    vehiculo = await crear_vehiculo(cliente, headers_autorizacion)
+    creado = await crear_mantenimiento(
+        cliente,
+        headers_autorizacion,
+        vehiculo["id"],
+        costo_estimado=120000,
+        kilometraje=47000,
+        fecha_programada="2026-12-01T10:00:00",
+    )
+
+    respuesta = await cliente.put(
+        f"/mantenimientos/{creado.json()['id']}",
+        json={"descripcion": "Cambio de aceite y filtros"},
+        headers=headers_autorizacion,
+    )
+
+    assert respuesta.status_code == 200
+    datos = respuesta.json()
+    assert datos["descripcion"] == "Cambio de aceite y filtros"
+    assert datos["costo_estimado"] == 120000
+    assert datos["kilometraje"] == 47000
+    assert datos["fecha_programada"] is not None
+
+
+@pytest.mark.asyncio
+async def test_patch_actualiza_mantenimiento(cliente, headers_autorizacion):
+    """PATCH es la forma canónica de actualizar y también es parcial."""
+    vehiculo = await crear_vehiculo(cliente, headers_autorizacion)
+    creado = await crear_mantenimiento(
+        cliente, headers_autorizacion, vehiculo["id"], costo_estimado=120000
+    )
+
+    respuesta = await cliente.patch(
+        f"/mantenimientos/{creado.json()['id']}",
+        json={"costo_estimado": 90000},
+        headers=headers_autorizacion,
+    )
+
+    assert respuesta.status_code == 200
+    assert respuesta.json()["costo_estimado"] == 90000
+    assert respuesta.json()["descripcion"] == "Cambio de aceite y filtros"
+
+
+@pytest.mark.asyncio
 async def test_completar_mantenimiento_conserva_la_fecha_de_cierre(
     cliente, headers_autorizacion
 ):

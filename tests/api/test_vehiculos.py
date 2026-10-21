@@ -83,7 +83,7 @@ async def test_obtener_vehiculo_inexistente(cliente, headers_autorizacion):
 
 @pytest.mark.asyncio
 async def test_actualizar_vehiculo(cliente, headers_autorizacion):
-    """La actualización reemplaza los datos del vehículo."""
+    """La actualización cambia los campos enviados."""
     creado = await crear_vehiculo(cliente, headers_autorizacion)
 
     respuesta = await cliente.put(
@@ -101,6 +101,54 @@ async def test_actualizar_vehiculo(cliente, headers_autorizacion):
     assert respuesta.status_code == 200
     assert respuesta.json()["marca"] == "Mazda"
     assert respuesta.json()["kilometraje_actual"] == 15000
+
+
+@pytest.mark.asyncio
+async def test_actualizar_vehiculo_conserva_los_campos_omitidos(
+    cliente, headers_autorizacion
+):
+    """Actualizar solo la marca no borra el kilometraje ni la fecha de compra.
+
+    Regresión: la actualización anterior sobrescribía con los valores por
+    defecto del schema, así que un cliente que solo enviaba la marca
+    reiniciaba el odómetro del vehículo a cero.
+    """
+    creado = await crear_vehiculo(
+        cliente,
+        headers_autorizacion,
+        kilometraje_actual=48000,
+        fecha_compra="2024-03-01T10:00:00",
+    )
+
+    respuesta = await cliente.put(
+        f"/vehiculos/{creado.json()['id']}",
+        json={"marca": "Mazda"},
+        headers=headers_autorizacion,
+    )
+
+    assert respuesta.status_code == 200
+    datos = respuesta.json()
+    assert datos["marca"] == "Mazda"
+    assert datos["kilometraje_actual"] == 48000
+    assert datos["fecha_compra"] == "2024-03-01T10:00:00"
+
+
+@pytest.mark.asyncio
+async def test_patch_actualiza_vehiculo(cliente, headers_autorizacion):
+    """PATCH es la forma canónica de actualizar y también es parcial."""
+    creado = await crear_vehiculo(
+        cliente, headers_autorizacion, kilometraje_actual=48000
+    )
+
+    respuesta = await cliente.patch(
+        f"/vehiculos/{creado.json()['id']}",
+        json={"modelo": "Corolla Cross"},
+        headers=headers_autorizacion,
+    )
+
+    assert respuesta.status_code == 200
+    assert respuesta.json()["modelo"] == "Corolla Cross"
+    assert respuesta.json()["kilometraje_actual"] == 48000
 
 
 @pytest.mark.asyncio
